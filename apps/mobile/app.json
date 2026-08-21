@@ -20,15 +20,16 @@
       "predictiveBackGestureEnabled": false,
       "intentFilters": [
         {
-          "action": "android.intent.action.SEND",
+          "action": "SEND",
           "category": [
-            "android.intent.category.DEFAULT"
+            "DEFAULT"
           ],
           "mimeType": [
             "text/plain"
           ]
         }
-      ]
+      ],
+      "package": "com.bprathamesh20.mindvault"
     },
     "web": {
       "output": "static",
@@ -50,6 +51,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "69846c50-533b-4781-b0e2-8c63a8246399"
+      }
+    },
+    "owner": "bprathamesh20"
   }
 }
