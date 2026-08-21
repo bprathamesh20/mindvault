@@ -78,15 +78,43 @@ export default function ItemPage() {
         </p>
       )}
 
-      <article className="prose prose-stone mt-10 max-w-none dark:prose-invert prose-headings:font-serif prose-img:rounded-lg">
-        {html ? (
-          <div dangerouslySetInnerHTML={{ __html: html }} />
-        ) : (
-          <p className="whitespace-pre-wrap leading-relaxed">
-            {item.contentText}
+      {item.type === "youtube" &&
+      typeof item.embedJson === "object" &&
+      item.embedJson !== null &&
+      "videoId" in item.embedJson ? (
+        <div className="mt-10 aspect-video w-full overflow-hidden rounded-xl bg-black">
+          <iframe
+            src={`https://www.youtube.com/embed/${String(item.embedJson.videoId)}`}
+            title={item.title ?? "YouTube video"}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            className="h-full w-full"
+          />
+        </div>
+      ) : null}
+
+      {item.type === "youtube" && item.contentText ? (
+        <details className="mt-8 rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+          <summary className="cursor-pointer text-sm text-stone-500 dark:text-stone-400">
+            Transcript
+          </summary>
+          <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-stone-600 dark:text-stone-300">
+            {item.contentText.slice(0, 20000)}
           </p>
-        )}
-      </article>
+        </details>
+      ) : null}
+
+      {item.type !== "youtube" && (
+        <article className="prose prose-stone mt-10 max-w-none dark:prose-invert prose-headings:font-serif prose-img:rounded-lg">
+          {html ? (
+            <div dangerouslySetInnerHTML={{ __html: html }} />
+          ) : (
+            <p className="whitespace-pre-wrap leading-relaxed">
+              {item.contentText}
+            </p>
+          )}
+        </article>
+      )}
     </main>
   );
 }

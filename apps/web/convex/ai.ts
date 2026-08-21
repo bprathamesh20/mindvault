@@ -19,10 +19,11 @@ function buildTaggingInput(item: ItemDoc): string | undefined {
       return `${title}\n\n${text}`.slice(0, 4000).trim() || undefined;
     case "tweet":
     case "instagram":
+    case "youtube":
     case "note":
     case "link":
     case "image":
-      return `${title}${text ? `\n\n${text}` : ""}`.slice(0, 3000).trim() || undefined;
+      return `${title}${text ? `\n\n${text}` : ""}`.slice(0, 6000).trim() || undefined;
     default:
       return undefined;
   }

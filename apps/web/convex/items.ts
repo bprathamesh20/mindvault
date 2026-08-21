@@ -193,6 +193,7 @@ export const get = query({
       summary: v.optional(v.string()),
       htmlUrl: v.optional(v.string()),
       thumbnailUrl: v.optional(v.string()),
+      embedJson: v.optional(v.any()),
       savedAt: v.number(),
     }),
     v.null(),
@@ -218,6 +219,7 @@ export const get = query({
       summary: doc.summary,
       htmlUrl: htmlUrl ?? undefined,
       thumbnailUrl: thumbnailUrl ?? undefined,
+      embedJson: doc.embedJson,
       savedAt: doc.savedAt,
     };
   },

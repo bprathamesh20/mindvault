@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { itemTypeValidator } from "./shared";
 import { query, mutation } from "./_generated/server";
 
 async function requireUserIdentity(ctx: {
@@ -15,16 +16,7 @@ export const list = query({
     v.object({
       id: v.id("spaces"),
       name: v.string(),
-      type: v.optional(
-        v.union(
-          v.literal("article"),
-          v.literal("tweet"),
-          v.literal("instagram"),
-          v.literal("image"),
-          v.literal("note"),
-          v.literal("link"),
-        ),
-      ),
+      type: v.optional(itemTypeValidator),
       tag: v.optional(v.string()),
     }),
   ),
@@ -43,16 +35,7 @@ export const list = query({
 export const create = mutation({
   args: {
     name: v.string(),
-    type: v.optional(
-      v.union(
-        v.literal("article"),
-        v.literal("tweet"),
-        v.literal("instagram"),
-        v.literal("image"),
-        v.literal("note"),
-        v.literal("link"),
-      ),
-    ),
+    type: v.optional(itemTypeValidator),
     tag: v.optional(v.string()),
   },
   returns: v.id("spaces"),

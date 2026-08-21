@@ -11,6 +11,7 @@ export default defineSchema({
       v.literal("article"),
       v.literal("tweet"),
       v.literal("instagram"),
+      v.literal("youtube"),
       v.literal("image"),
       v.literal("note"),
       v.literal("link"),

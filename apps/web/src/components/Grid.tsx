@@ -13,7 +13,7 @@ const FILTERS = [
   { label: "Notes", value: "note" },
 ] as const;
 
-type ItemType = "article" | "tweet" | "instagram" | "image" | "note" | "link";
+type ItemType = "article" | "tweet" | "instagram" | "youtube" | "image" | "note" | "link";
 type Space = {
   id: string;
   name: string;

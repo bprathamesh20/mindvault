@@ -4,18 +4,16 @@ export const ITEM_TYPES = [
   "article",
   "tweet",
   "instagram",
+  "youtube",
   "image",
   "note",
   "link",
 ] as const;
 
+export type ItemType = (typeof ITEM_TYPES)[number];
+
 export const itemTypeValidator = v.union(
-  v.literal("article"),
-  v.literal("tweet"),
-  v.literal("instagram"),
-  v.literal("image"),
-  v.literal("note"),
-  v.literal("link"),
+  ...ITEM_TYPES.map((t) => v.literal(t)),
 );
 
 export function normalizeUrl(input: string): string {
@@ -31,17 +29,22 @@ export function normalizeUrl(input: string): string {
   return url.href;
 }
 
-export function detectType(
-  url: string,
-): "tweet" | "instagram" | "article" | "link" {
-  const host = new URL(url).hostname.replace(/^www\./, "");
-  if (host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com") {
+export function detectType(url: string): ItemType {
+  const host = new URL(url).hostname.replace(/^(www|m|mobile)\./, "");
+  if (
+    host === "x.com" ||
+    host === "twitter.com" ||
+    host === "mobile.twitter.com"
+  ) {
     return "tweet";
   }
   if (host === "instagram.com") {
     return "instagram";
   }
-  if (host === "pin.it" || host === "youtube.com" || host === "youtu.be") {
+  if (host === "youtube.com" || host === "youtu.be") {
+    return "youtube";
+  }
+  if (host === "pin.it" || host === "github.com") {
     return "link";
   }
   return "article";

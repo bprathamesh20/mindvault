@@ -1,5 +1,6 @@
 import { Image } from "expo-image";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking } from "react-native";
 import { useMutation } from "convex/react";
 import { api } from "../../../web/convex/_generated/api";
 import type { Id } from "../../../web/convex/_generated/dataModel";
@@ -7,7 +8,7 @@ import { resolveFileUrl } from "../lib/convex-url";
 
 export type Card = {
   id: string;
-  type: "article" | "tweet" | "instagram" | "image" | "note" | "link";
+  type: "article" | "tweet" | "instagram" | "youtube" | "image" | "note" | "link";
   url?: string;
   title?: string;
   author?: string;
@@ -56,7 +57,21 @@ export function ItemCard({ item }: { item: Card }) {
           {item.author}
         </Text>
       ) : null}
-      {item.thumbnailUrl ? (
+      {item.type === "youtube" && item.url ? (
+        <Pressable onPress={() => void Linking.openURL(item.url!)}>
+          {item.thumbnailUrl ? (
+            <Image
+              source={{ uri: resolveFileUrl(item.thumbnailUrl) }}
+              style={styles.thumbnail}
+              contentFit="cover"
+              recyclingKey={item.id}
+            />
+          ) : null}
+          {item.title ? (
+            <Text style={styles.title} numberOfLines={3}>{item.title}</Text>
+          ) : null}
+        </Pressable>
+      ) : item.thumbnailUrl ? (
         <Image
           source={{ uri: resolveFileUrl(item.thumbnailUrl) }}
           style={styles.thumbnail}

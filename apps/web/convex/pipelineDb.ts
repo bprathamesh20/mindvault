@@ -20,7 +20,13 @@ export const captureInternal = internalMutation({
       .withIndex("by_url", (q) => q.eq("url", args.url))
       .unique();
     if (existing) {
-      if (existing.status === "failed") {
+      // Failed → full retry. Ready but never AI-enriched (old/pre-AI items,
+      // or types added later) → re-run the pipeline so it gets tags/embedding.
+      const needsAi =
+        existing.status === "ready" &&
+        !existing.summary &&
+        !(existing.embedding && existing.embedding.length > 0);
+      if (existing.status === "failed" || needsAi) {
         await ctx.db.patch(existing._id, {
           status: "pending",
           enrichAttempts: 0,

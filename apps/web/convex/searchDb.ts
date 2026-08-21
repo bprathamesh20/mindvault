@@ -6,7 +6,7 @@ import {
 } from "convex/server";
 import type { Id } from "./_generated/dataModel";
 import { cardValidator } from "./items";
-import { itemTypeValidator } from "./shared";
+import { itemTypeValidator, ItemType } from "./shared";
 
 export const fts = internalQuery({
   args: {
@@ -39,7 +39,7 @@ export const getByIds = internalQuery({
     const out: Array<
       | {
           id: Id<"items">;
-          type: "article" | "tweet" | "instagram" | "image" | "note" | "link";
+          type: ItemType;
           url?: string;
           title?: string;
           author?: string;

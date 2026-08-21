@@ -3,7 +3,7 @@ import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { cardValidator } from "./items";
-import { itemTypeValidator } from "./shared";
+import { itemTypeValidator, ItemType } from "./shared";
 
 async function requireUserIdentity(ctx: {
   auth: { getUserIdentity(): Promise<{ tokenIdentifier: string } | null> };
@@ -94,7 +94,7 @@ export const search = action({
     const docs: Array<
       | {
           id: Id<"items">;
-          type: "article" | "tweet" | "instagram" | "image" | "note" | "link";
+          type: ItemType;
           url?: string;
           title?: string;
           author?: string;

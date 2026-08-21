@@ -6,6 +6,7 @@ import { internal } from "./_generated/api";
 import * as cheerio from "cheerio";
 import { parseHTML } from "linkedom";
 import { Readability } from "@mozilla/readability";
+import { YoutubeTranscript } from "youtube-transcript";
 import type { Id } from "./_generated/dataModel";
 
 const UA =
@@ -170,6 +171,61 @@ async function extractInstagram(url: URL): Promise<Extracted> {
   };
 }
 
+function youTubeVideoId(url: URL): string | undefined {
+  const host = url.hostname.replace(/^(www|m)\./, "");
+  if (host === "youtu.be") return url.pathname.slice(1).split("/")[0] || undefined;
+  const v = url.searchParams.get("v");
+  if (v) return v;
+  const m = url.pathname.match(/\/(?:shorts|live|embed)\/([A-Za-z0-9_-]+)/);
+  return m?.[1];
+}
+
+async function extractYouTube(url: URL): Promise<Extracted> {
+  const videoId = youTubeVideoId(url);
+  if (!videoId) throw new Error("Could not parse YouTube video ID");
+  const kind = url.pathname.includes("/shorts/") ? "short" : "video";
+
+  // oEmbed: free, no key, reliable metadata
+  let title: string | undefined;
+  let author: string | undefined;
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`,
+      { headers: { "User-Agent": UA } },
+    );
+    if (res.ok) {
+      const j = (await res.json()) as Record<string, unknown>;
+      if (typeof j.title === "string") title = j.title;
+      if (typeof j.author_name === "string") author = j.author_name;
+    }
+  } catch {
+    // fall through — thumbnail URL is deterministic anyway
+  }
+  if (!title) throw new Error("YouTube metadata unavailable (private video?)");
+
+  // Transcript → the actual spoken content becomes searchable
+  let transcript: string | undefined;
+  try {
+    const parts = await YoutubeTranscript.fetchTranscript(videoId);
+    if (parts && parts.length > 0) {
+      transcript = parts
+        .map((p) => p.text.replace(/\s+/g, " "))
+        .join(" ")
+        .slice(0, 50000);
+    }
+  } catch {
+    // captions disabled or blocked — video still saves with title/summary-less text
+  }
+
+  return {
+    title,
+    author: author ? `${author} (YouTube)` : undefined,
+    text: transcript ?? title,
+    thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+    embedJson: { provider: "youtube", videoId, kind },
+  };
+}
+
 async function extractArticle(url: URL): Promise<Extracted> {
   let html: string | undefined;
   try {
@@ -249,12 +305,14 @@ export const enrich = internalAction({
 
     try {
       const url = new URL(item.url);
-      const host = url.hostname.replace(/^www\./, "");
+      const host = url.hostname.replace(/^(www|m)\./, "");
       let extracted: Extracted;
       if (host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com") {
         extracted = await extractTweet(url);
       } else if (host === "instagram.com") {
         extracted = await extractInstagram(url);
+      } else if (host === "youtube.com" || host === "youtu.be") {
+        extracted = await extractYouTube(url);
       } else {
         extracted = await extractArticle(url);
       }
