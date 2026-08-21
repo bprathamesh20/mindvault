@@ -13,12 +13,12 @@ import {
 } from "react-native";
 import { usePaginatedQuery, useMutation } from "convex/react";
 import { useRouter } from "expo-router";
-import * as Linking from "expo-linking";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../../../web/convex/_generated/api";
 import { ItemCard, type Card } from "../components/item-card";
 import { SignIn } from "../components/sign-in";
 import { useConvexAuth } from "@convex-dev/auth/react";
+import { useShareIntentContext } from "expo-share-intent";
 import { CONVEX_URL } from "../lib/convex-url";
 
 const URL_RE = /^(https?:\/\/|www\.)\S+$/i;
@@ -52,6 +52,10 @@ function HomeScreen() {
     { initialNumItems: 20 },
   );
 
+  // Share-sheet delivery (Android ACTION_SEND / iOS share extension)
+  const { hasShareIntent, shareIntent, resetShareIntent } =
+    useShareIntentContext();
+
   const flash = useCallback((message: string) => {
     setToast(message);
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -83,17 +87,15 @@ function HomeScreen() {
     [captureUrl, captureNote, flash],
   );
 
-  // Share-sheet: Android ACTION_SEND delivers the shared text as the "URL"
+  // Handle shared content delivered by the share sheet
   useEffect(() => {
-    async function handle(url: string | null) {
-      if (!url) return;
-      const shared = decodeURIComponent(url.replace(/^share:/, ""));
-      if (URL_RE.test(shared.trim())) await capture(shared);
+    if (!hasShareIntent) return;
+    const target = (shareIntent.webUrl ?? shareIntent.text ?? "").trim();
+    if (target.length > 0) {
+      void capture(target);
+      resetShareIntent();
     }
-    void Linking.getInitialURL().then(handle);
-    const sub = Linking.addEventListener("url", ({ url }) => void handle(url));
-    return () => sub.remove();
-  }, [capture]);
+  }, [hasShareIntent, shareIntent, capture, resetShareIntent]);
 
   async function save() {
     const v = draft;
