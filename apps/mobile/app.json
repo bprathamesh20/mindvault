@@ -24,8 +24,10 @@
           "category": [
             "DEFAULT"
           ],
-          "mimeType": [
-            "text/plain"
+          "data": [
+            {
+              "mimeType": "text/plain"
+            }
           ]
         }
       ],
