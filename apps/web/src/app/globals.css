@@ -1,0 +1,45 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-newsreader), ui-serif, Georgia, serif;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: #fafaf9;
+  color: #1c1917;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #0c0a09;
+    color: #d6d3d1;
+  }
+}
+
+::selection {
+  background: #d6d3d1;
+  color: #1c1917;
+}
+
+@media (prefers-color-scheme: dark) {
+  ::selection {
+    background: #57534e;
+    color: #fafaf9;
+  }
+}
+
+/* Calmer scrollbars that match the palette */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover {
+  scrollbar-color: rgba(120, 113, 108, 0.35) transparent;
+}
