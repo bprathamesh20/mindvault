@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="options.css" />
+    <title>MindVault Settings</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="logo-dot"></span>
+        <h1>MindVault Settings</h1>
+      </header>
+
+      <label>
+        Backend URL
+        <input
+          id="backend-url"
+          type="url"
+          placeholder="https://your-deployment.convex.cloud"
+          spellcheck="false"
+        />
+      </label>
+      <p class="hint">
+        Convex cloud: <code>https://&lt;name&gt;.convex.site</code> (http actions live on
+        <code>.convex.site</code>, not <code>.convex.cloud</code>) · local dev:
+        <code>http://127.0.0.1:3210</code>
+      </p>
+
+      <label>
+        Capture secret
+        <input
+          id="capture-secret"
+          type="password"
+          placeholder="CAPTURE_SECRET value"
+          autocomplete="off"
+        />
+      </label>
+      <p class="hint">
+        Must match <code>CAPTURE_SECRET</code> on your Convex deployment — set it with
+        <code>npx convex env set CAPTURE_SECRET=…</code> (in <code>apps/web</code>).
+      </p>
+
+      <label>
+        Web app URL
+        <input
+          id="web-app-url"
+          type="url"
+          placeholder="http://localhost:3100"
+          spellcheck="false"
+        />
+      </label>
+      <p class="hint">Used by the “Open vault” button in the popup.</p>
+
+      <div class="row">
+        <button id="save" type="button">Save</button>
+        <button id="test" type="button" class="secondary">Test connection</button>
+      </div>
+
+      <p id="status" role="status"></p>
+
+      <hr />
+
+      <section class="shortcuts">
+        <h2>Keyboard shortcut</h2>
+        <p>
+          Default: <strong id="shortcut-hint">⌘⇧S</strong> — saves the current tab in the
+          background.
+        </p>
+        <p class="hint">
+          Chrome reserves some shortcuts; change or rebind it at
+          <code>chrome://extensions/shortcuts</code>.
+        </p>
+      </section>
+    </main>
+
+    <script src="options.js"></script>
+  </body>
+</html>

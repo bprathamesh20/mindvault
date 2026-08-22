@@ -78,5 +78,6 @@ mindvault/
 ├── apps/web/          # Next.js app + convex/ backend functions
 │   ├── convex/        # schema, auth, items, pipeline, ai, search, crons
 │   └── src/           # app router UI (capture, grid, search, reader)
-└── apps/mobile/       # Expo app (grid, search, capture, share intent)
+├── apps/mobile/       # Expo app (grid, search, capture, share intent)
+└── apps/extension/    # Chrome MV3 extension (instant save via /api/capture)
 ```

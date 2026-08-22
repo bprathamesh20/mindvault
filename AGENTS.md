@@ -32,6 +32,9 @@ mindvault/
 │   │   └── crons.ts         # hourly sweep of stuck pending items
 │   └── src/                 # Next.js UI (capture bar, grid, cards, reader /item/[id])
 └── apps/mobile/             # Expo app; imports web's convex/_generated/api directly
+
+(Chrome MV3 extension lives in `apps/extension/` — plain JS, no build step;
+saves via the `/api/capture` httpAction with `CAPTURE_SECRET`.)
 ```
 
 ## Commands

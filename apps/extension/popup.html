@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>MindVault</title>
+  </head>
+  <body>
+    <header>
+      <span class="logo-dot"></span>
+      <h1>MindVault</h1>
+    </header>
+
+    <main>
+      <div id="page-card" hidden>
+        <img id="page-favicon" alt="" />
+        <div class="page-text">
+          <div id="page-title"></div>
+          <div id="page-host"></div>
+        </div>
+      </div>
+
+      <p id="notice" hidden></p>
+
+      <button id="save-btn" type="button">Add to MindVault</button>
+
+      <footer>
+        <button id="vault-link" type="button">Open vault</button>
+        <span id="shortcut-hint"></span>
+      </footer>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
