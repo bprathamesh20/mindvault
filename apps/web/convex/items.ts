@@ -194,6 +194,9 @@ export const get = query({
       htmlUrl: v.optional(v.string()),
       thumbnailUrl: v.optional(v.string()),
       embedJson: v.optional(v.any()),
+      userNote: v.optional(v.string()),
+      isDone: v.optional(v.boolean()),
+      tags: v.array(v.string()),
       savedAt: v.number(),
     }),
     v.null(),
@@ -208,6 +211,15 @@ export const get = query({
     const thumbnailUrl = doc.thumbnailStorageId
       ? await ctx.storage.getUrl(doc.thumbnailStorageId)
       : undefined;
+    const tagLinks = await ctx.db
+      .query("itemTags")
+      .withIndex("by_item", (q) => q.eq("itemId", doc._id))
+      .take(30);
+    const tags: string[] = [];
+    for (const link of tagLinks) {
+      const tag = await ctx.db.get(link.tagId);
+      if (tag) tags.push(tag.name);
+    }
     return {
       id: doc._id,
       type: doc.type,
@@ -220,19 +232,85 @@ export const get = query({
       htmlUrl: htmlUrl ?? undefined,
       thumbnailUrl: thumbnailUrl ?? undefined,
       embedJson: doc.embedJson,
+      userNote: doc.userNote,
+      isDone: doc.isDone,
+      tags,
       savedAt: doc.savedAt,
     };
   },
 });
 
-export const updateTitle = mutation({
-  args: { id: v.id("items"), title: v.string() },
+export const serendipity = query({
+  // nonce: bump it to re-roll; the value itself is ignored
+  args: { nonce: v.optional(v.number()) },
+  returns: v.union(v.id("items"), v.null()),
+  handler: async (ctx) => {
+    await requireUserIdentity(ctx);
+    const pool = await ctx.db
+      .query("items")
+      .withIndex("by_status_and_savedAt", (q) => q.eq("status", "ready"))
+      .take(200);
+    if (pool.length === 0) return null;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    return pick._id;
+  },
+});
+
+export const update = mutation({
+  args: {
+    id: v.id("items"),
+    title: v.optional(v.string()),
+    userNote: v.optional(v.string()),
+    isDone: v.optional(v.boolean()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     await requireUserIdentity(ctx);
-    const title = args.title.trim().slice(0, 300);
-    if (title.length === 0) throw new Error("Title cannot be empty");
-    await ctx.db.patch(args.id, { title });
+    const { id, ...patch } = args;
+    if (patch.title !== undefined) {
+      const title = patch.title.trim().slice(0, 300);
+      if (title.length === 0) delete patch.title;
+      else patch.title = title;
+    }
+    if (patch.userNote !== undefined) {
+      patch.userNote = patch.userNote.trim().slice(0, 5000);
+    }
+    await ctx.db.patch(id, patch);
+    return null;
+  },
+});
+
+export const addTag = mutation({
+  args: { id: v.id("items"), name: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireUserIdentity(ctx);
+    const name = args.name.trim().toLowerCase().slice(0, 30);
+    if (name.length < 2) throw new Error("Tag too short");
+    const item = await ctx.db.get(args.id);
+    if (!item) return null;
+
+    let tag = await ctx.db
+      .query("tags")
+      .withIndex("by_name", (q) => q.eq("name", name))
+      .unique();
+    if (tag) {
+      await ctx.db.patch(tag._id, { useCount: tag.useCount + 1 });
+    } else {
+      const tagId = await ctx.db.insert("tags", { name, useCount: 1 });
+      tag = await ctx.db.get(tagId);
+    }
+    if (!tag) return null;
+    const linked = await ctx.db
+      .query("itemTags")
+      .withIndex("by_item", (q) => q.eq("itemId", args.id))
+      .take(30);
+    if (linked.some((l) => l.tagId === tag!._id)) return null;
+    await ctx.db.insert("itemTags", { itemId: args.id, tagId: tag._id });
+
+    // Manual tags join the searchable text
+    const searchText = `${item.searchText ?? ""} ${name}`.slice(0, 30000);
+    await ctx.db.patch(args.id, { searchText });
     return null;
   },
 });

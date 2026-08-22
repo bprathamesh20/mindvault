@@ -19,12 +19,19 @@ export const metadata: Metadata = {
   description: "Remember everything. Organize nothing.",
 };
 
+const themeInit = `try{var t=localStorage.getItem("mv-theme")||"dark";if(t==="dark")document.documentElement.classList.add("dark")}catch(e){document.documentElement.classList.add("dark")}`;
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className={`${inter.variable} ${newsreader.variable} font-sans antialiased`}>
+    <html lang="en" className="dark">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+      </head>
+      <body
+        className={`${inter.variable} ${newsreader.variable} font-sans antialiased`}
+      >
         <Providers>{children}</Providers>
       </body>
     </html>

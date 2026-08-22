@@ -1,10 +1,141 @@
 "use client";
 
-import Link from "next/link";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { Card } from "./types";
+
+export function ItemCard({
+  item,
+  onOpen,
+}: {
+  item: Card;
+  onOpen?: (id: string) => void;
+}) {
+  const removeItem = useMutation(api.items.removeItem);
+
+  if (item.status === "pending") {
+    return (
+      <div className="surface mb-5 break-inside-avoid animate-pulse rounded-xl border p-5 opacity-70">
+        <div className="h-3 w-1/3 rounded bg-stone-200 dark:bg-[#2a2a31]" />
+        <div className="mt-3 h-3 w-full rounded bg-stone-200 dark:bg-[#26262c]" />
+        <div className="mt-2 h-3 w-2/3 rounded bg-stone-200 dark:bg-[#232329]" />
+      </div>
+    );
+  }
+
+  if (item.status === "failed") {
+    return (
+      <div className="surface mb-5 break-inside-avoid rounded-xl border p-5">
+        <p className="text-sm text-stone-500 dark:text-[#8b8b94]">
+          Couldn&apos;t save this one.
+        </p>
+        {item.url && (
+          <p className="mt-1 truncate text-xs text-stone-400 dark:text-[#5b5b64]">
+            {item.url}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  const isSocial = item.type === "tweet" || item.type === "instagram";
+  const quote =
+    isTweetCard(item) ? item.embedJson?.quote : undefined;
+
+  return (
+    <div
+      onClick={() => onOpen?.(item.id)}
+      className={`surface group mb-5 break-inside-avoid overflow-hidden rounded-xl border shadow-sm transition-all duration-200 hover:shadow-lg hover:brightness-[1.02] dark:shadow-none ${
+        item.type === "note"
+          ? "border-amber-200/70 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20"
+          : ""
+      } ${onOpen ? "cursor-pointer" : ""}`}
+    >
+      {isSocial && item.author ? (
+        <p className="px-4 pt-3.5 text-xs font-medium text-stone-500 dark:text-[#9b9ba4]">
+          {item.author}
+        </p>
+      ) : null}
+      {item.thumbnailUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={item.thumbnailUrl}
+          alt={item.title ?? ""}
+          className="mt-3 max-h-[420px] w-full object-cover brightness-[0.98] first:mt-0 dark:brightness-[0.85]"
+        />
+      ) : null}
+      <div className={item.thumbnailUrl ? "p-4 pt-3" : "p-4"}>
+        {item.title && !isTweetCard(item) ? (
+          <h2 className="font-serif text-lg leading-snug text-stone-900 dark:text-[#e4e4e7]">
+            {item.title}
+          </h2>
+        ) : null}
+        {isTweetCard(item) && item.preview ? (
+          <p className="text-sm leading-relaxed text-stone-700 dark:text-[#d4d4d8]">
+            {item.preview}
+          </p>
+        ) : null}
+        {!item.thumbnailUrl && !isTweetCard(item) && item.preview ? (
+          <p className="mt-1.5 line-clamp-3 text-sm text-stone-500 dark:text-[#9b9ba4]">
+            {item.preview}
+          </p>
+        ) : null}
+        {quote ? (
+          <div className="mt-3 rounded-lg border border-stone-200 p-3 dark:border-[#2a2a31] dark:bg-[#202027]">
+            <p className="text-xs font-medium text-stone-600 dark:text-[#b6b6bf]">
+              {quote.name ?? quote.handle}
+              {quote.handle ? ` @${quote.handle}` : ""}
+            </p>
+            {quote.text ? (
+              <p className="mt-1 line-clamp-4 text-[13px] text-stone-500 dark:text-[#9b9ba4]">
+                {quote.text}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        {item.summary ? (
+          <p className="mt-2 line-clamp-2 text-[13px] italic text-stone-400 dark:text-[#77777f]">
+            {item.summary}
+          </p>
+        ) : null}
+        {item.tags.length > 0 ? (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {item.tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border border-stone-200 px-2 py-0.5 text-[11px] text-stone-500 dark:border-[#2a2a31] dark:text-[#8b8b94]"
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        <p className="mt-3 text-[11px] text-stone-400 dark:text-[#6b6b75]">
+          {[item.sourceDomain, timeAgo(item.savedAt)].filter(Boolean).join(" · ")}
+        </p>
+      </div>
+      <button
+        aria-label="Delete"
+        onClick={(e) => {
+          e.stopPropagation();
+          void removeItem({ id: item.id as Id<"items"> });
+        }}
+        className="absolute right-2 top-2 rounded-full opacity-0 transition hover:text-red-400 [div.group:hover>&]:opacity-100"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function isTweetCard(
+  item: Card,
+): item is Card & {
+  embedJson: { quote?: { name?: string; handle?: string; text?: string } };
+} {
+  return item.type === "tweet" && typeof item.embedJson === "object";
+}
 
 function timeAgo(savedAt: number): string {
   const seconds = Math.floor((Date.now() - savedAt) / 1000);
@@ -19,215 +150,4 @@ function timeAgo(savedAt: number): string {
     month: "short",
     day: "numeric",
   });
-}
-
-const cardBase =
-  "mb-5 break-inside-avoid overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-sm transition-all duration-200 hover:shadow-md hover:border-stone-300 dark:border-stone-800/80 dark:bg-stone-900/60 dark:shadow-none dark:hover:border-stone-700";
-
-function Thumb({ src, alt }: { src: string; alt: string }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={alt}
-      className="max-h-96 w-full object-cover brightness-[0.98] dark:brightness-[0.82] dark:contrast-[1.02]"
-    />
-  );
-}
-
-function Meta({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 px-4 pb-3.5 text-xs text-stone-500 dark:text-stone-400">
-      {children}
-    </div>
-  );
-}
-
-type QuoteInfo = {
-  handle?: string;
-  name?: string;
-  text?: string;
-  thumbnailUrl?: string;
-};
-
-export default function ItemCard({
-  item,
-  onTagClick,
-}: {
-  item: Card;
-  onTagClick?: (tag: string) => void;
-}) {
-  const removeItem = useMutation(api.items.removeItem);
-  const isTweet = item.type === "tweet";
-  const quote = isTweet
-    ? (item.embedJson as { quote?: QuoteInfo } | null)?.quote
-    : undefined;
-
-  if (item.status === "pending") {
-    return (
-      <div className={`${cardBase} animate-pulse p-5`}>
-        <div className="h-3 w-1/3 rounded bg-stone-200 dark:bg-stone-800" />
-        <div className="mt-3 h-3 w-full rounded bg-stone-200 dark:bg-stone-800/70" />
-        <div className="mt-2 h-3 w-2/3 rounded bg-stone-200 dark:bg-stone-800/50" />
-      </div>
-    );
-  }
-
-  if (item.status === "failed") {
-    return (
-      <div className={cardBase}>
-        <div className="p-5">
-          <p className="text-sm text-stone-500 dark:text-stone-400">
-            Couldn&apos;t save this one.
-          </p>
-          {item.url && (
-            <p className="mt-1 truncate text-xs text-stone-400 dark:text-stone-600">
-              {item.url}
-            </p>
-          )}
-        </div>
-        <Meta>
-          <span>{item.sourceDomain}</span>
-          <span>·</span>
-          <span>{timeAgo(item.savedAt)}</span>
-        </Meta>
-      </div>
-    );
-  }
-
-  if (item.type === "note") {
-    return (
-      <div className="mb-5 break-inside-avoid rounded-xl border border-amber-200/70 bg-amber-50 p-5 shadow-sm transition hover:shadow-md dark:border-amber-900/50 dark:bg-amber-950/30">
-        <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
-          {item.preview}
-        </p>
-        {item.summary && (
-          <p className="mt-2 line-clamp-2 text-xs italic text-stone-500 dark:text-stone-400">
-            {item.summary}
-          </p>
-        )}
-        <CardTags tags={item.tags} onTagClick={onTagClick} />
-        <Meta>
-          <span className="text-amber-700/70 dark:text-amber-500/70">
-            {timeAgo(item.savedAt)}
-          </span>
-        </Meta>
-      </div>
-    );
-  }
-
-  const body = (
-    <>
-      {(isTweet || item.type === "instagram") && (
-        <div className="flex items-center gap-2 px-4 pt-3.5 text-sm">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-200 font-serif text-xs italic dark:bg-stone-800">
-            {(item.author ?? "?").replace(/^@/, "").charAt(0).toUpperCase()}
-          </span>
-          <span className="font-medium">{item.author}</span>
-        </div>
-      )}
-      {item.thumbnailUrl && (
-        <div className={isTweet || item.type === "instagram" ? "mt-3" : ""}>
-          <Thumb src={item.thumbnailUrl} alt={item.title ?? "saved item"} />
-        </div>
-      )}
-      <div className="px-4 pt-3.5">
-        {item.title && !isTweet && (
-          <h2 className="font-serif text-[17px] leading-snug">{item.title}</h2>
-        )}
-        {isTweet && item.preview && (
-          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-stone-700 dark:text-stone-200">
-            {item.preview}
-          </p>
-        )}
-        {quote && (
-          <div className="mt-3 rounded-lg border border-stone-200 bg-stone-50/60 p-3 dark:border-stone-700/70 dark:bg-stone-800/40">
-            <p className="text-xs">
-              <span className="font-medium">
-                {quote.name ?? quote.handle}
-              </span>
-              {quote.handle && (
-                <span className="text-stone-400 dark:text-stone-500">
-                  {" "}
-                  @{quote.handle}
-                </span>
-              )}
-            </p>
-            {quote.text && (
-              <p className="mt-1 line-clamp-4 text-[13px] leading-relaxed text-stone-600 dark:text-stone-300">
-                {quote.text}
-              </p>
-            )}
-            {quote.thumbnailUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={quote.thumbnailUrl}
-                alt="quoted post"
-                className="mt-2 max-h-48 w-full rounded-md object-cover"
-              />
-            )}
-          </div>
-        )}
-        {item.summary && !isTweet && item.type !== "instagram" && (
-          <p className="mt-2 line-clamp-2 text-[13px] italic leading-relaxed text-stone-500 dark:text-stone-400">
-            {item.summary}
-          </p>
-        )}
-        <CardTags tags={item.tags} onTagClick={onTagClick} />
-      </div>
-      <Meta>
-        {item.sourceDomain && <span>{item.sourceDomain}</span>}
-        {item.sourceDomain && <span>·</span>}
-        <span>{timeAgo(item.savedAt)}</span>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            void removeItem({ id: item.id as Id<"items"> });
-          }}
-          className="ml-auto opacity-0 transition hover:text-red-500 [div:hover>&]:opacity-100"
-          aria-label="Remove"
-        >
-          ✕
-        </button>
-      </Meta>
-    </>
-  );
-
-  if (item.type === "article" && item.status === "ready") {
-    return (
-      <Link href={`/item/${item.id}`} className={`${cardBase} block`}>
-        {body}
-      </Link>
-    );
-  }
-
-  return <div className={cardBase}>{body}</div>;
-}
-
-function CardTags({
-  tags,
-  onTagClick,
-}: {
-  tags: string[];
-  onTagClick?: (tag: string) => void;
-}) {
-  if (tags.length === 0) return null;
-  return (
-    <div className="mt-2.5 flex flex-wrap gap-1.5">
-      {tags.map((tag) => (
-        <button
-          key={tag}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onTagClick?.(tag);
-          }}
-          className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500 transition hover:bg-stone-200 hover:text-stone-700 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-200"
-        >
-          #{tag}
-        </button>
-      ))}
-    </div>
-  );
 }

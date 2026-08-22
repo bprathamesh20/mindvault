@@ -35,6 +35,8 @@ export default defineSchema({
     enrichAttempts: v.optional(v.number()),
     aiAttempts: v.optional(v.number()),
     failureReason: v.optional(v.string()),
+    userNote: v.optional(v.string()),
+    isDone: v.optional(v.boolean()),
     savedAt: v.number(),
   })
     .index("by_savedAt", ["savedAt"])

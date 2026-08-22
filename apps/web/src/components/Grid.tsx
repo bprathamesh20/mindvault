@@ -3,17 +3,25 @@
 import { useState } from "react";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import ItemCard from "./ItemCard";
+import { ItemCard } from "./ItemCard";
 
 const FILTERS = [
   { label: "All", value: undefined },
   { label: "Articles", value: "article" },
   { label: "Tweets", value: "tweet" },
   { label: "Instagram", value: "instagram" },
+  { label: "YouTube", value: "youtube" },
   { label: "Notes", value: "note" },
 ] as const;
 
-type ItemType = "article" | "tweet" | "instagram" | "youtube" | "image" | "note" | "link";
+type ItemType =
+  | "article"
+  | "tweet"
+  | "instagram"
+  | "youtube"
+  | "image"
+  | "note"
+  | "link";
 type Space = {
   id: string;
   name: string;
@@ -21,7 +29,11 @@ type Space = {
   tag?: string;
 };
 
-export default function Grid() {
+export default function Grid({
+  onOpen,
+}: {
+  onOpen?: (id: string) => void;
+}) {
   const spaces = useQuery(api.spaces.list);
   const createSpace = useMutation(api.spaces.create);
   const removeSpace = useMutation(api.spaces.remove);
@@ -39,45 +51,18 @@ export default function Grid() {
   );
 
   const filterActive = type !== undefined || tag !== null;
-  const activeSpace = spaces?.find((s) => s.id === activeSpaceId);
 
   function applyType(value: ItemType | undefined) {
     setType(value);
     setActiveSpaceId(null);
   }
-
   function applyTag(next: string | null) {
     setTag(next);
     setActiveSpaceId(null);
   }
 
-  function applySpace(space: Space) {
-    setType(space.type);
-    setTag(space.tag ?? null);
-    setActiveSpaceId(space.id);
-  }
-
-  async function saveSpace() {
-    const name = spaceName.trim();
-    if (!name) return;
-    try {
-      const id = await createSpace({
-        name,
-        type: type ?? undefined,
-        tag: tag ?? undefined,
-      });
-      setActiveSpaceId(id);
-      setNaming(false);
-      setSpaceName("");
-    } catch {
-      // duplicate-ish failures are non-fatal for a personal app
-      setNaming(false);
-      setSpaceName("");
-    }
-  }
-
   return (
-    <section className="mx-auto w-full max-w-6xl px-6">
+    <>
       <div className="mb-3 flex flex-wrap items-center justify-center gap-1.5">
         {FILTERS.map((f) => (
           <button
@@ -85,8 +70,8 @@ export default function Grid() {
             onClick={() => applyType(f.value)}
             className={`rounded-full px-3.5 py-1.5 text-[13px] transition ${
               type === f.value && !activeSpaceId
-                ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
-                : "text-stone-500 hover:bg-stone-200/60 dark:text-stone-400 dark:hover:bg-stone-800/60"
+                ? "bg-stone-800 text-stone-100 dark:bg-stone-200 dark:text-stone-900"
+                : "text-stone-500 hover:bg-stone-200/50 dark:text-[#8b8b94] dark:hover:bg-[#232329]"
             }`}
           >
             {f.label}
@@ -95,33 +80,32 @@ export default function Grid() {
         {tag && (
           <button
             onClick={() => applyTag(null)}
-            className="rounded-full bg-stone-900 px-3.5 py-1.5 text-[13px] text-white transition hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
+            className="rounded-full bg-stone-800 px-3.5 py-1.5 text-[13px] text-stone-100 dark:bg-stone-200 dark:text-stone-900"
           >
             #{tag} ✕
           </button>
         )}
       </div>
 
-      {(filterActive || (spaces && spaces.length > 0)) && (
+      {(filterActive || (spaces && spaces.length > 0)) && createSpace && (
         <div className="mb-8 flex flex-wrap items-center justify-center gap-1.5">
           {spaces?.map((s) => (
             <span
               key={s.id}
-              className={`group inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[12px] transition ${
+              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[12px] transition ${
                 activeSpaceId === s.id
-                  ? "border-stone-400 bg-stone-100 text-stone-900 dark:border-stone-500 dark:bg-stone-800 dark:text-stone-100"
-                  : "border-stone-200 text-stone-500 hover:border-stone-300 hover:text-stone-700 dark:border-stone-800 dark:text-stone-400 dark:hover:border-stone-600 dark:hover:text-stone-200"
+                  ? "border-stone-400 bg-stone-100 text-stone-900 dark:border-[#4a4a55] dark:bg-[#232329] dark:text-stone-100"
+                  : "border-stone-200 text-stone-500 hover:border-stone-400 dark:border-[#2a2a31] dark:text-[#8b8b94] dark:hover:border-[#4a4a55]"
               }`}
             >
-              <button onClick={() => applySpace(s)}>✦ {s.name}</button>
+              <button onClick={() => { setType(s.type); setTag(s.tag ?? null); setActiveSpaceId(s.id); }}>
+                ✦ {s.name}
+              </button>
               {activeSpaceId === s.id && (
                 <button
                   aria-label={`Delete space ${s.name}`}
-                  className="text-stone-400 transition hover:text-red-500"
-                  onClick={() => {
-                    void removeSpace({ id: s.id });
-                    setActiveSpaceId(null);
-                  }}
+                  onClick={() => { void removeSpace({ id: s.id }); setActiveSpaceId(null); }}
+                  className="text-stone-400 hover:text-red-400"
                 >
                   ✕
                 </button>
@@ -131,7 +115,7 @@ export default function Grid() {
           {filterActive && !naming && (
             <button
               onClick={() => setNaming(true)}
-              className="rounded-full border border-dashed border-stone-300 px-3 py-1 text-[12px] text-stone-400 transition hover:border-stone-500 hover:text-stone-600 dark:border-stone-700 dark:hover:border-stone-500 dark:hover:text-stone-300"
+              className="rounded-full border border-dashed border-stone-300 px-3 py-1 text-[12px] text-stone-400 hover:border-stone-500 dark:border-[#3a3a42] dark:hover:border-[#5b5b64]"
             >
               ＋ Save view as Space
             </button>
@@ -140,7 +124,14 @@ export default function Grid() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                void saveSpace();
+                const name = spaceName.trim();
+                if (name) {
+                  createSpace({ name, type, tag: tag ?? undefined }).then(
+                    (id: string) => setActiveSpaceId(id),
+                  );
+                }
+                setNaming(false);
+                setSpaceName("");
               }}
               className="inline-flex items-center gap-1"
             >
@@ -148,16 +139,10 @@ export default function Grid() {
                 autoFocus
                 value={spaceName}
                 onChange={(e) => setSpaceName(e.target.value)}
-                onBlur={() => {
-                  if (!spaceName.trim()) setNaming(false);
-                }}
                 placeholder="Space name…"
-                className="w-36 rounded-full border border-stone-300 bg-transparent px-3 py-1 text-[12px] outline-none focus:border-stone-500 dark:border-stone-600 dark:focus:border-stone-400"
+                className="w-36 rounded-full border border-stone-300 bg-transparent px-3 py-1 text-[12px] outline-none dark:border-[#3a3a42]"
               />
-              <button
-                type="submit"
-                className="rounded-full bg-stone-900 px-3 py-1 text-[12px] text-white dark:bg-stone-100 dark:text-stone-900"
-              >
+              <button type="submit" className="rounded-full bg-stone-800 px-3 py-1 text-[12px] text-stone-100 dark:bg-stone-200 dark:text-stone-900">
                 Save
               </button>
             </form>
@@ -165,27 +150,16 @@ export default function Grid() {
         </div>
       )}
 
-      {activeSpace && (
-        <p className="mb-6 text-center font-serif text-lg italic text-stone-500 dark:text-stone-400">
-          ✦ {activeSpace.name}
-        </p>
-      )}
-
       {results.length === 0 && !isLoading ? (
         <div className="py-24 text-center">
-          <p className="font-serif text-2xl italic text-stone-400 dark:text-stone-500">
+          <p className="font-serif text-2xl italic text-stone-400 dark:text-[#6b6b75]">
             {filterActive ? "Nothing here yet." : "Your mind is empty."}
-          </p>
-          <p className="mt-2 text-sm text-stone-400 dark:text-stone-500">
-            {filterActive
-              ? "Save something that matches this view."
-              : "Paste a link or jot a thought above."}
           </p>
         </div>
       ) : (
         <div className="columns-1 gap-5 sm:columns-2 lg:columns-3 2xl:columns-4">
           {results.map((item) => (
-            <ItemCard key={item.id} item={item} onTagClick={applyTag} />
+            <ItemCard key={item.id} item={item} onOpen={onOpen} />
           ))}
         </div>
       )}
@@ -194,12 +168,13 @@ export default function Grid() {
         <div className="mt-4 pb-16 text-center">
           <button
             onClick={() => loadMore(24)}
-            className="rounded-full border border-stone-300 px-5 py-2 text-sm text-stone-600 transition hover:bg-stone-100 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+            className="rounded-full border border-stone-300 px-5 py-2 text-sm text-stone-600 transition hover:bg-stone-100 dark:border-[#2a2a31] dark:text-[#9b9ba4] dark:hover:bg-[#1f1f25]"
           >
             Load more
           </button>
         </div>
       )}
-    </section>
+    </>
   );
 }
+
