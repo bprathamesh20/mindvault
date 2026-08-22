@@ -59,7 +59,9 @@ export const search = action({
       },
     );
 
-    // Vector half
+    // Vector half — vectorSearch ALWAYS returns `limit` nearest neighbors,
+    // even when nothing is truly similar. Cut the noise tail with an
+    // adaptive floor: keep hits within 0.15 of the best hit, above 0.25.
     let vecIds: Id<"items">[] = [];
     if (embedding && embedding.length === 1536) {
       const hits = args.type
@@ -72,7 +74,9 @@ export const search = action({
             vector: embedding,
             limit: 30,
           });
-      vecIds = hits.map((h) => h._id);
+      const best = hits.reduce((m, h) => Math.max(m, h._score), 0);
+      const floor = Math.max(0.25, best - 0.15);
+      vecIds = hits.filter((h) => h._score >= floor).map((h) => h._id);
     }
 
     // Reciprocal-rank fusion
