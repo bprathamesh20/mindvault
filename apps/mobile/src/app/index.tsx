@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -63,22 +64,28 @@ function HomeScreen() {
   }, []);
 
   const capture = useCallback(
-    async (raw: string) => {
+    async (raw: string, fromShare = false) => {
       const v = raw.trim();
       if (!v) return;
       try {
+        let message: string;
         if (URL_RE.test(v)) {
           const res = await captureUrl({ url: v });
-          flash(
+          message =
             res.outcome === "duplicate"
-              ? "Already in your mind"
+              ? "Already in your mind ✓"
               : res.outcome === "retrying"
                 ? "Retrying…"
-                : "Saved to your mind",
-          );
+                : "Saved to your mind";
         } else {
           await captureNote({ text: v });
-          flash("Note saved");
+          message = "Note saved";
+        }
+        flash(message);
+        // Shared from another app → close us once saved,
+        // Android drops the user back where they shared from
+        if (fromShare) {
+          setTimeout(() => BackHandler.exitApp(), 900);
         }
       } catch (err) {
         flash(err instanceof Error ? err.message : "Could not save that");
@@ -87,14 +94,19 @@ function HomeScreen() {
     [captureUrl, captureNote, flash],
   );
 
-  // Handle shared content delivered by the share sheet
+  // Share-sheet delivery (Android ACTION_SEND / iOS share extension).
+  // Guard against double-firing: cold start can surface the same intent via
+  // both the initial-URL check and the event listener.
+  const lastShared = useRef<string | null>(null);
+
   useEffect(() => {
     if (!hasShareIntent) return;
     const target = (shareIntent.webUrl ?? shareIntent.text ?? "").trim();
-    if (target.length > 0) {
-      void capture(target);
-      resetShareIntent();
-    }
+    if (target.length === 0) return;
+    if (lastShared.current === target) return;
+    lastShared.current = target;
+    resetShareIntent();
+    void capture(target, true);
   }, [hasShareIntent, shareIntent, capture, resetShareIntent]);
 
   async function save() {
