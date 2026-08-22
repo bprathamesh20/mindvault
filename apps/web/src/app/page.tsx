@@ -6,7 +6,7 @@ import { useAction } from "convex/react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import SignIn from "../components/SignIn";
-import CaptureBar from "../components/CaptureBar";
+import { CaptureFab } from "../components/CaptureFab";
 import Grid from "../components/Grid";
 import { ItemCard } from "../components/ItemCard";
 import { ThemeRail } from "../components/ThemeRail";
@@ -88,7 +88,7 @@ export default function Home() {
       </div>
 
       <div className="mx-auto w-full max-w-6xl px-8 pb-16 pt-10 md:px-10">
-        <CaptureBar />
+        <CaptureFab />
         {showResults ? (
           <section className="mt-10">
             {(results ?? []).length === 0 ? (
