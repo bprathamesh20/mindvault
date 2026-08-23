@@ -8,6 +8,12 @@ Save articles, X posts, Instagram posts/reels, images, and notes into one calm p
 
 See [SPEC.md](../SPEC.md) for the full product spec and roadmap.
 
+## How it fits together
+
+<p align="center">
+  <img src="docs/architecture.svg" width="100%" alt="MindVault architecture: capture from Chrome extension, web, Android share or any HTTP client → Convex pipeline (extract → enrich → embed) → reactive grid, hybrid search and reader on web + mobile" />
+</p>
+
 ## Quick start (web)
 
 ```bash

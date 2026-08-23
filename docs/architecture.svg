@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1160 900" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="panelGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#151B29"/>
+      <stop offset="1" stop-color="#10151F"/>
+    </linearGradient>
+    <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <marker id="arrIndigo" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#818CF8"/>
+    </marker>
+    <marker id="arrSlate" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#7C8AA5"/>
+    </marker>
+    <marker id="arrEmerald" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#34D399"/>
+    </marker>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="1160" height="900" fill="#0B0E15"/>
+
+  <!-- header -->
+  <rect x="36" y="38" width="22" height="22" rx="6" fill="url(#logoGrad)"/>
+  <text x="66" y="56" font-family="Georgia,'Times New Roman',serif" font-size="24" font-style="italic" font-weight="600" fill="#F2F5FC">MindVault</text>
+  <text x="1124" y="55" text-anchor="end" font-size="13.5" fill="#8B95AB">Remember everything. Organize nothing.</text>
+
+  <!-- panels -->
+  <rect x="36" y="128" width="252" height="700" rx="16" fill="url(#panelGrad)" stroke="#232C40" filter="url(#soft)"/>
+  <rect x="348" y="128" width="472" height="700" rx="16" fill="url(#panelGrad)" stroke="#232C40" filter="url(#soft)"/>
+  <rect x="890" y="128" width="234" height="700" rx="16" fill="url(#panelGrad)" stroke="#232C40" filter="url(#soft)"/>
+
+  <!-- column headers -->
+  <circle cx="58" cy="158" r="4" fill="#818CF8"/>
+  <text x="72" y="163" font-size="12" font-weight="700" letter-spacing="2" fill="#AAB4CC">CAPTURE</text>
+  <circle cx="370" cy="158" r="4" fill="#FBBF24"/>
+  <text x="384" y="163" font-size="12" font-weight="700" letter-spacing="2" fill="#AAB4CC">CONVEX BACKEND<tspan fill="#6B7690" letter-spacing="0"> — db + queue + ai</tspan></text>
+  <circle cx="912" cy="158" r="4" fill="#34D399"/>
+  <text x="926" y="163" font-size="12" font-weight="700" letter-spacing="2" fill="#AAB4CC">YOUR MEMORY</text>
+
+  <!-- capture entry arrows -->
+  <g fill="none" stroke="#818CF8" stroke-width="1.8" opacity="0.8">
+    <path d="M272 236 C318 236 320 186 362 186" marker-end="url(#arrIndigo)"/>
+    <path d="M272 344 C318 344 318 195 362 195" marker-end="url(#arrIndigo)"/>
+    <path d="M272 452 C318 452 316 204 362 204" marker-end="url(#arrIndigo)"/>
+    <path d="M272 560 C318 560 314 213 362 213" marker-end="url(#arrIndigo)"/>
+  </g>
+
+  <!-- col 1: capture cards -->
+  <g>
+    <rect x="52" y="190" width="220" height="92" rx="12" fill="#161D2C" stroke="#263149"/>
+    <text x="68" y="224" font-size="17">🧩</text>
+    <text x="96" y="224" font-size="15.5" font-weight="600" fill="#EAEFFA">Chrome extension</text>
+    <text x="68" y="248" font-size="12.5" fill="#8B97AF">toolbar click · ⌘⇧S — zero UI</text>
+
+    <rect x="52" y="298" width="220" height="92" rx="12" fill="#161D2C" stroke="#263149"/>
+    <text x="68" y="332" font-size="17">🌐</text>
+    <text x="96" y="332" font-size="15.5" font-weight="600" fill="#EAEFFA">Web app</text>
+    <text x="68" y="356" font-size="12.5" fill="#8B97AF">paste URL · quick note</text>
+
+    <rect x="52" y="406" width="220" height="92" rx="12" fill="#161D2C" stroke="#263149"/>
+    <text x="68" y="440" font-size="17">📱</text>
+    <text x="96" y="440" font-size="15.5" font-weight="600" fill="#EAEFFA">Android share</text>
+    <text x="68" y="464" font-size="12.5" fill="#8B97AF">share-sheet intent → app</text>
+
+    <rect x="52" y="514" width="220" height="92" rx="12" fill="#161D2C" stroke="#263149"/>
+    <text x="68" y="548" font-size="17">🔖</text>
+    <text x="96" y="548" font-size="15.5" font-weight="600" fill="#EAEFFA">Bookmarklet / script</text>
+    <text x="68" y="572" font-size="12.5" fill="#8B97AF">any HTTP client can POST</text>
+
+    <rect x="52" y="648" width="220" height="88" rx="12" fill="none" stroke="#3A4664" stroke-dasharray="5 4"/>
+    <text x="68" y="684" font-family="Georgia,serif" font-style="italic" font-size="15" fill="#C7CFE2">“capture in &lt; 2 seconds,</text>
+    <text x="68" y="706" font-family="Georgia,serif" font-style="italic" font-size="15" fill="#C7CFE2">find in &lt; 2 seconds.”</text>
+  </g>
+
+  <!-- node A: endpoint -->
+  <rect x="372" y="168" width="424" height="64" rx="12" fill="#161D2C" stroke="#263149" filter="url(#soft)"/>
+  <rect x="372" y="178" width="3" height="44" rx="1.5" fill="#818CF8"/>
+  <text x="396" y="196" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="17" font-weight="600" fill="#EDF1FA">/api/capture</text>
+  <rect x="616" y="180" width="168" height="26" rx="13" fill="#0F1524" stroke="#2A3550"/>
+  <text x="700" y="197" text-anchor="middle" font-size="11.5" fill="#9AA6BF">🔒 Bearer CAPTURE_SECRET</text>
+  <text x="396" y="218" font-size="12" fill="#6F7A93">httpAction — machine capture for extensions · scripts · share sheet</text>
+
+  <line x1="584" y1="232" x2="584" y2="258" stroke="#7C8AA5" stroke-width="1.6" marker-end="url(#arrSlate)"/>
+  <text x="598" y="250" font-size="11.5" fill="#7C87A0">instant ack · normalizeUrl · dedupe by URL</text>
+
+  <!-- node B: capture mutation -->
+  <rect x="372" y="262" width="424" height="68" rx="12" fill="#161D2C" stroke="#263149" filter="url(#soft)"/>
+  <rect x="372" y="272" width="3" height="48" rx="1.5" fill="#818CF8"/>
+  <text x="396" y="290" font-size="16" font-weight="600" fill="#EDF1FA">capture mutation</text>
+  <text x="396" y="314" font-size="12.5" fill="#94A0B8">insert { status: "pending" } — placeholder card appears instantly</text>
+
+  <line x1="584" y1="330" x2="584" y2="360" stroke="#7C8AA5" stroke-width="1.6" marker-end="url(#arrSlate)"/>
+  <text x="598" y="350" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11.5" fill="#6F7A93">scheduler.runAfter(0) — durable queue</text>
+
+  <!-- node C: enrich -->
+  <rect x="372" y="364" width="424" height="136" rx="12" fill="#161D2C" stroke="#263149" filter="url(#soft)"/>
+  <rect x="372" y="374" width="3" height="116" rx="1.5" fill="#FBBF24"/>
+  <text x="396" y="392" font-size="16" font-weight="600" fill="#EDF1FA">enrich — domain extractors</text>
+  <rect x="396" y="402" width="376" height="22" rx="6" fill="#0F1524" stroke="#2A3550"/>
+  <text x="408" y="418" font-size="12" fill="#B9C4DA">x.com / twitter.com → fxtwitter API (text · author · media)</text>
+  <rect x="396" y="428" width="376" height="22" rx="6" fill="#0F1524" stroke="#2A3550"/>
+  <text x="408" y="444" font-size="12" fill="#B9C4DA">instagram.com → crawler-UA og-tags (caption · author)</text>
+  <rect x="396" y="454" width="376" height="22" rx="6" fill="#0F1524" stroke="#2A3550"/>
+  <text x="408" y="470" font-size="12" fill="#B9C4DA">articles → Readability → r.jina.ai fallback</text>
+  <text x="396" y="494" font-size="12" fill="#E8B84B">thumbnails downloaded → Convex File Storage</text>
+
+  <line x1="584" y1="500" x2="584" y2="526" stroke="#7C8AA5" stroke-width="1.6" marker-end="url(#arrSlate)"/>
+  <text x="598" y="518" font-size="11.5" fill="#7C87A0">persistMeta</text>
+
+  <!-- status strip -->
+  <rect x="372" y="530" width="424" height="64" rx="12" fill="#161D2C" stroke="#263149" filter="url(#soft)"/>
+  <rect x="372" y="540" width="3" height="44" rx="1.5" fill="#7C8AA5"/>
+  <rect x="396" y="544" width="86" height="24" rx="12" fill="#1A2130" stroke="#33405C"/>
+  <text x="439" y="561" text-anchor="middle" font-size="12" fill="#9AA6BF">pending</text>
+  <text x="494" y="561" font-size="13" fill="#5B6680">→</text>
+  <rect x="512" y="544" width="74" height="24" rx="12" fill="rgba(52,211,153,0.10)" stroke="#34D399" stroke-opacity="0.4"/>
+  <text x="549" y="561" text-anchor="middle" font-size="12" fill="#34D399">ready</text>
+  <text x="598" y="561" font-size="13" fill="#5B6680">/</text>
+  <rect x="618" y="544" width="74" height="24" rx="12" fill="rgba(251,113,133,0.08)" stroke="#FB7185" stroke-opacity="0.4"/>
+  <text x="655" y="561" text-anchor="middle" font-size="12" fill="#FB7185">failed</text>
+  <text x="396" y="586" font-size="11.5" fill="#6F7A93">retries ×3 → graceful card · ⏱ cron sweeps stuck > 15 min</text>
+
+  <line x1="584" y1="594" x2="584" y2="618" stroke="#7C8AA5" stroke-width="1.6" marker-end="url(#arrSlate)"/>
+  <text x="598" y="612" font-size="11.5" fill="#7C87A0">schedule enrichAi</text>
+
+  <!-- node E: ai -->
+  <rect x="372" y="622" width="424" height="92" rx="12" fill="#161D2C" stroke="#263149" filter="url(#soft)"/>
+  <rect x="372" y="632" width="3" height="72" rx="1.5" fill="#A78BFA"/>
+  <text x="396" y="648" font-size="16" font-weight="600" fill="#EDF1FA">enrichAi — OpenRouter (one key)</text>
+  <rect x="396" y="658" width="376" height="22" rx="6" fill="#0F1524" stroke="#2A3550"/>
+  <text x="408" y="674" font-size="12" fill="#B9C4DA">summary ≤ 2 sentences · 2–5 tags steered by your tag vocabulary</text>
+  <rect x="396" y="684" width="376" height="22" rx="6" fill="#0F1524" stroke="#2A3550"/>
+  <text x="408" y="700" font-size="12" fill="#B9C4DA">text-embedding-3-small → 1536-d vector</text>
+
+  <line x1="584" y1="714" x2="584" y2="748" stroke="#7C8AA5" stroke-width="1.6" marker-end="url(#arrSlate)"/>
+  <text x="598" y="736" font-size="11.5" fill="#7C87A0">persistAi · tag upserts</text>
+
+  <!-- data layer -->
+  <rect x="372" y="752" width="424" height="56" rx="12" fill="#131926" stroke="#263149" filter="url(#soft)"/>
+  <rect x="372" y="762" width="3" height="36" rx="1.5" fill="#7C8AA5"/>
+  <text x="396" y="776" font-size="14.5" font-weight="600" fill="#E5EAF5">items · tags · itemTags · spaces</text>
+  <text x="396" y="796" font-size="12" fill="#7C87A0">FTS searchText · vector index 1536 · file storage (thumbs · html)</text>
+
+  <!-- reactive trunk -->
+  <path d="M796 780 H850 V238" fill="none" stroke="#34D399" stroke-width="1.6" stroke-dasharray="5 4" opacity="0.85"/>
+  <g fill="none" stroke="#34D399" stroke-width="1.6" stroke-dasharray="5 4" opacity="0.85">
+    <path d="M850 238 H898" marker-end="url(#arrEmerald)"/>
+    <path d="M850 354 H898" marker-end="url(#arrEmerald)"/>
+    <path d="M850 470 H898" marker-end="url(#arrEmerald)"/>
+    <path d="M850 586 H898" marker-end="url(#arrEmerald)"/>
+    <path d="M850 702 H898" marker-end="url(#arrEmerald)"/>
+  </g>
+  <text transform="rotate(-90 836 505)" x="836" y="505" text-anchor="middle" font-size="11.5" letter-spacing="1.5" fill="#34D399" opacity="0.8">live subscriptions · reactive queries</text>
+
+  <!-- col 3: memory cards -->
+  <g>
+    <rect x="906" y="190" width="202" height="96" rx="12" fill="#161D2C" stroke="#263149"/>
+    <text x="920" y="222" font-size="16">🖼</text>
+    <text x="946" y="222" font-size="14.5" font-weight="600" fill="#EAEFFA">Masonry grid</text>
+    <text x="920" y="248" font-size="12" fill="#8B97AF">web · mobile — live cards</text>
+
+    <rect x="906" y="306" width="202" height="96" rx="12" fill="#161D2C" stroke="#263149"/>
+    <text x="920" y="338" font-size="16">🔍</text>
+    <text x="946" y="338" font-size="14.5" font-weight="600" fill="#EAEFFA">Hybrid search</text>
+    <text x="920" y="364" font-size="12" fill="#8B97AF">FTS + vectors · RRF fuse</text>
+
+    <rect x="906" y="422" width="202" height="96" rx="12" fill="#161D2C" stroke="#263149"/>
+    <text x="920" y="454" font-size="16">📖</text>
+    <text x="946" y="454" font-size="14.5" font-weight="600" fill="#EAEFFA">Reader mode</text>
+    <text x="920" y="480" font-size="12" fill="#8B97AF">long-form, clean</text>
+
+    <rect x="906" y="538" width="202" height="96" rx="12" fill="#161D2C" stroke="#263149"/>
+    <text x="920" y="570" font-size="16">✨</text>
+    <text x="946" y="570" font-size="14.5" font-weight="600" fill="#EAEFFA">Serendipity</text>
+    <text x="920" y="596" font-size="12" fill="#8B97AF">old gems resurface</text>
+
+    <rect x="906" y="654" width="202" height="96" rx="12" fill="#161D2C" stroke="#263149"/>
+    <text x="920" y="686" font-size="16">☁️</text>
+    <text x="946" y="686" font-size="14.5" font-weight="600" fill="#EAEFFA">One backend</text>
+    <text x="920" y="712" font-size="12" fill="#8B97AF">same Convex, everywhere</text>
+  </g>
+
+  <!-- legend -->
+  <g font-size="12.5" fill="#8B95AB">
+    <rect x="36" y="856" width="12" height="12" rx="3" fill="#818CF8"/>
+    <text x="54" y="866">capture</text>
+    <rect x="170" y="856" width="12" height="12" rx="3" fill="#FBBF24"/>
+    <text x="188" y="866">extraction</text>
+    <rect x="340" y="856" width="12" height="12" rx="3" fill="#A78BFA"/>
+    <text x="358" y="866">ai enrichment</text>
+    <rect x="520" y="856" width="12" height="12" rx="3" fill="#7C8AA5"/>
+    <text x="538" y="866">data + flow</text>
+    <rect x="700" y="856" width="12" height="12" rx="3" fill="#34D399"/>
+    <text x="718" y="866">reactive ui</text>
+  </g>
+</svg>
