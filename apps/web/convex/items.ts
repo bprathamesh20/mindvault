@@ -11,6 +11,7 @@ import {
   domainOf,
   itemTypeValidator,
   normalizeUrl,
+  removeToken,
 } from "./shared";
 
 const cardValidator = v.object({
@@ -266,16 +267,36 @@ export const update = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await requireUserIdentity(ctx);
-    const { id, ...patch } = args;
-    if (patch.title !== undefined) {
-      const title = patch.title.trim().slice(0, 300);
-      if (title.length === 0) delete patch.title;
-      else patch.title = title;
+    const patch: {
+      title?: string;
+      userNote?: string;
+      isDone?: boolean;
+      searchText?: string;
+      indexedNote?: string;
+    } = {};
+    if (args.title !== undefined) {
+      const title = args.title.trim().slice(0, 300);
+      if (title.length > 0) patch.title = title;
     }
-    if (patch.userNote !== undefined) {
-      patch.userNote = patch.userNote.trim().slice(0, 5000);
+    if (args.userNote !== undefined) {
+      const note = args.userNote.trim().slice(0, 5000);
+      patch.userNote = note;
+      // User notes join the searchable text (re-index on every edit)
+      const doc = await ctx.db.get(args.id);
+      if (doc) {
+        let base = doc.searchText ?? "";
+        if (doc.indexedNote) base = removeToken(base, doc.indexedNote);
+        if (note.length > 0) {
+          patch.searchText = `${base} ${note}`.trim().slice(0, 30000);
+        } else {
+          patch.searchText = base.slice(0, 30000);
+        }
+        patch.indexedNote = note.length > 0 ? note : undefined;
+      }
     }
-    await ctx.db.patch(id, patch);
+    if (args.isDone !== undefined) patch.isDone = args.isDone;
+    if (Object.keys(patch).length === 0) return null;
+    await ctx.db.patch(args.id, patch);
     return null;
   },
 });
@@ -305,12 +326,57 @@ export const addTag = mutation({
       .query("itemTags")
       .withIndex("by_item", (q) => q.eq("itemId", args.id))
       .take(30);
-    if (linked.some((l) => l.tagId === tag!._id)) return null;
-    await ctx.db.insert("itemTags", { itemId: args.id, tagId: tag._id });
+    if (linked.some((l) => l.tagId === tag!._id)) {
+      // Already linked by the AI — upgrade it to manual so re-enrichment
+      // and tag cleanup preserve it.
+      const existing = linked.find((l) => l.tagId === tag!._id)!;
+      if (existing.source !== "manual") {
+        await ctx.db.patch(existing._id, { source: "manual" });
+      }
+      return null;
+    }
+    await ctx.db.insert("itemTags", {
+      itemId: args.id,
+      tagId: tag._id,
+      source: "manual",
+    });
 
     // Manual tags join the searchable text
     const searchText = `${item.searchText ?? ""} ${name}`.slice(0, 30000);
     await ctx.db.patch(args.id, { searchText });
+    return null;
+  },
+});
+
+export const removeTag = mutation({
+  args: { id: v.id("items"), name: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireUserIdentity(ctx);
+    const name = args.name.trim().toLowerCase();
+    const tag = await ctx.db
+      .query("tags")
+      .withIndex("by_name", (q) => q.eq("name", name))
+      .unique();
+    if (!tag) return null;
+    const linked = await ctx.db
+      .query("itemTags")
+      .withIndex("by_item", (q) => q.eq("itemId", args.id))
+      .take(30);
+    const link = linked.find((l) => l.tagId === tag._id);
+    if (!link) return null;
+    await ctx.db.delete(link._id);
+    if (tag.useCount > 0) {
+      await ctx.db.patch(tag._id, { useCount: tag.useCount - 1 });
+    }
+
+    // Manual tags leave the searchable text
+    const item = await ctx.db.get(args.id);
+    if (item?.searchText) {
+      await ctx.db.patch(args.id, {
+        searchText: removeToken(item.searchText, name).slice(0, 30000),
+      });
+    }
     return null;
   },
 });

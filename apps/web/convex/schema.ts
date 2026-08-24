@@ -36,6 +36,7 @@ export default defineSchema({
     aiAttempts: v.optional(v.number()),
     failureReason: v.optional(v.string()),
     userNote: v.optional(v.string()),
+    indexedNote: v.optional(v.string()),
     isDone: v.optional(v.boolean()),
     savedAt: v.number(),
   })
@@ -63,6 +64,7 @@ export default defineSchema({
   itemTags: defineTable({
     itemId: v.id("items"),
     tagId: v.id("tags"),
+    source: v.optional(v.union(v.literal("ai"), v.literal("manual"))),
   })
     .index("by_item", ["itemId"])
     .index("by_tag", ["tagId"]),

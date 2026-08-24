@@ -56,16 +56,40 @@ export const persistAi = internalMutation({
       .query("itemTags")
       .withIndex("by_item", (q) => q.eq("itemId", args.itemId))
       .collect();
+    // Preserve manually-added tags — only replace the previous AI batch
+    const manualNames: string[] = [];
     for (const link of oldLinks) {
+      if (link.source === "manual") {
+        const tag = await ctx.db.get(link.tagId);
+        if (tag) manualNames.push(tag.name);
+        continue;
+      }
       await ctx.db.delete("itemTags", link._id);
     }
     for (const tagId of tagIds) {
-      await ctx.db.insert("itemTags", { itemId: args.itemId, tagId });
+      const alreadyManual = oldLinks.some(
+        (l) => l.source === "manual" && l.tagId === tagId,
+      );
+      if (!alreadyManual) {
+        await ctx.db.insert("itemTags", {
+          itemId: args.itemId,
+          tagId,
+          source: "ai",
+        });
+      }
     }
+
+    // Merge the fresh AI text with manual tags + indexed user note so
+    // re-enrichment never un-indexes user contributions
+    const baseText = args.searchText ?? item.searchText ?? "";
+    const searchText = [baseText, ...manualNames, item.indexedNote]
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 30000);
 
     await ctx.db.patch(args.itemId, {
       summary: args.summary,
-      searchText: args.searchText,
+      searchText,
       embedding: args.embedding,
     });
     return null;

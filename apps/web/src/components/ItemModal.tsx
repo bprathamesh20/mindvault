@@ -45,6 +45,7 @@ export function ItemModal({
   const item = useQuery(api.items.get, { id: itemId as Id<"items"> });
   const update = useMutation(api.items.update);
   const addTag = useMutation(api.items.addTag);
+  const removeTag = useMutation(api.items.removeTag);
   const removeItem = useMutation(api.items.removeItem);
 
   const [loaded, setLoaded] = useState<{ url: string; text: string } | null>(
@@ -226,9 +227,18 @@ export function ItemModal({
               {(item as Detail & { tags?: string[] }).tags?.map((t) => (
                 <span
                   key={t}
-                  className="rounded-full border border-stone-200 px-3 py-1 text-xs text-stone-500 dark:border-[#2a2a31] dark:text-[#9b9ba4]"
+                  className="group/tag inline-flex items-center gap-1.5 rounded-full border border-stone-200 px-3 py-1 text-xs text-stone-500 dark:border-[#2a2a31] dark:text-[#9b9ba4]"
                 >
                   {t}
+                  <button
+                    aria-label={`Remove tag ${t}`}
+                    onClick={() =>
+                      void removeTag({ id: itemId as Id<"items">, name: t })
+                    }
+                    className="text-stone-300 transition hover:text-red-400 dark:text-[#55555e] dark:hover:text-red-400"
+                  >
+                    ✕
+                  </button>
                 </span>
               ))}
               {tagging ? (

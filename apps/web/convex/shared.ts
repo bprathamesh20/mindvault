@@ -53,3 +53,17 @@ export function detectType(url: string): ItemType {
 export function domainOf(url: string): string {
   return new URL(url).hostname.replace(/^www\./, "");
 }
+
+/**
+ * Remove a single token (e.g. a deleted manual tag or a re-indexed user
+ * note) from the composed searchText, word-boundary safe.
+ */
+export function removeToken(text: string, token: string): string {
+  const t = token.trim().toLowerCase();
+  if (!t) return text;
+  return text
+    .split(/\s+/)
+    .filter((w) => w.toLowerCase() !== t)
+    .join(" ")
+    .trim();
+}
