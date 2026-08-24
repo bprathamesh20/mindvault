@@ -1,34 +1,31 @@
 import { Image } from "expo-image";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { Linking } from "react-native";
-import { useMutation } from "convex/react";
-import { api } from "../../../web/convex/_generated/api";
-import type { Id } from "../../../web/convex/_generated/dataModel";
-import { resolveFileUrl } from "../lib/convex-url";
+import { Ionicons } from "@expo/vector-icons";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { Card } from "../lib/types";
+import { colors, fonts, radius } from "../lib/theme";
+import { timeAgo } from "../lib/format";
 
-export type Card = {
-  id: string;
-  type: "article" | "tweet" | "instagram" | "youtube" | "image" | "note" | "link";
-  url?: string;
-  title?: string;
-  author?: string;
-  sourceDomain?: string;
-  preview?: string;
-  summary?: string;
-  tags: string[];
-  status: "pending" | "ready" | "failed";
-  savedAt: number;
-  thumbnailUrl?: string;
-  embedJson?: unknown;
+const THUMB_ASPECT: Partial<Record<Card["type"], number>> = {
+  youtube: 16 / 9,
+  instagram: 4 / 5,
+  image: 1,
+  article: 16 / 9,
+  link: 16 / 9,
 };
 
-export function ItemCard({ item }: { item: Card }) {
-  const removeItem = useMutation(api.items.removeItem);
-
+export function ItemCard({
+  item,
+  onPress,
+}: {
+  item: Card;
+  onPress?: (id: string) => void;
+}) {
   if (item.status === "pending") {
     return (
       <View style={[styles.card, styles.pending]}>
-        <ActivityIndicator size="small" color="#a8a29e" />
+        <View style={styles.skeletonBar} />
+        <View style={[styles.skeletonBar, styles.skeletonWide]} />
+        <View style={[styles.skeletonBar, styles.skeletonShort]} />
         <Text style={styles.pendingText}>saving…</Text>
       </View>
     );
@@ -36,60 +33,96 @@ export function ItemCard({ item }: { item: Card }) {
 
   if (item.status === "failed") {
     return (
-      <View style={styles.card}>
-        <Text style={styles.failedText}>Couldn&apos;t save this one.</Text>
+      <Pressable
+        style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+        onPress={() => onPress?.(item.id)}
+        android_ripple={{ color: colors.surfaceAlt }}
+      >
+        <Ionicons name="cloud-offline-outline" size={18} color={colors.textFaint} />
+        <Text style={styles.failedTitle}>Couldn&apos;t save this one.</Text>
         {item.url ? (
-          <Text style={styles.domain} numberOfLines={1}>
+          <Text style={styles.failedUrl} numberOfLines={2}>
             {item.url}
           </Text>
         ) : null}
-      </View>
+      </Pressable>
     );
   }
 
   const isSocial = item.type === "tweet" || item.type === "instagram";
-  const quote = isTweetCard(item) ? item.embedJson?.quote : undefined;
+  const isTweet = item.type === "tweet";
+  const quote =
+    isTweet && typeof item.embedJson === "object" && item.embedJson !== null
+      ? (item.embedJson as { quote?: { name?: string; handle?: string; text?: string } })
+          .quote
+      : undefined;
+  const thumbAspect = THUMB_ASPECT[item.type] ?? 16 / 9;
 
   return (
-    <View style={[styles.card, item.type === "note" && styles.noteCard]}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.card,
+        item.type === "note" && styles.noteCard,
+        pressed && styles.pressed,
+      ]}
+      onPress={() => onPress?.(item.id)}
+      android_ripple={{
+        color: item.type === "note" ? "#f3e8c8" : colors.surfaceAlt,
+      }}
+    >
       {isSocial && item.author ? (
-        <Text style={styles.author} numberOfLines={1}>
-          {item.author}
-        </Text>
+        <View style={styles.authorRow}>
+          <Ionicons
+            name={item.type === "tweet" ? "logo-twitter" : "logo-instagram"}
+            size={12}
+            color={colors.textFaint}
+          />
+          <Text style={styles.author} numberOfLines={1}>
+            {item.author}
+          </Text>
+        </View>
       ) : null}
-      {item.type === "youtube" && item.url ? (
-        <Pressable onPress={() => void Linking.openURL(item.url!)}>
-          {item.thumbnailUrl ? (
-            <Image
-              source={{ uri: resolveFileUrl(item.thumbnailUrl) }}
-              style={styles.thumbnail}
-              contentFit="cover"
-              recyclingKey={item.id}
-            />
+
+      {item.thumbnailUrl ? (
+        <View style={[styles.thumbWrap, !isSocial && styles.thumbBleed]}>
+          <Image
+            source={{ uri: item.thumbnailUrl }}
+            style={[styles.thumbnail, { aspectRatio: thumbAspect }]}
+            contentFit="cover"
+            recyclingKey={item.id}
+            transition={150}
+          />
+          {item.type === "youtube" ? (
+            <View style={styles.playOverlay}>
+              <View style={styles.playCircle}>
+                <Ionicons name="play" size={16} color="#fff" style={styles.playIcon} />
+              </View>
+            </View>
           ) : null}
-          {item.title ? (
-            <Text style={styles.title} numberOfLines={3}>{item.title}</Text>
-          ) : null}
-        </Pressable>
-      ) : item.thumbnailUrl ? (
-        <Image
-          source={{ uri: resolveFileUrl(item.thumbnailUrl) }}
-          style={styles.thumbnail}
-          contentFit="cover"
-          recyclingKey={item.id}
-        />
+        </View>
       ) : null}
-      {item.title && item.type !== "tweet" ? (
+
+      {item.title && !isTweet ? (
         <Text style={styles.title} numberOfLines={3}>
           {item.title}
         </Text>
       ) : null}
-      {item.type === "tweet" && item.preview ? (
-        <Text style={styles.tweetText}>{item.preview}</Text>
+
+      {isTweet && item.preview ? (
+        <Text style={styles.tweetText} numberOfLines={8}>
+          {item.preview}
+        </Text>
       ) : null}
+
+      {!isSocial && !isTweet && !item.thumbnailUrl && item.preview ? (
+        <Text style={styles.preview} numberOfLines={4}>
+          {item.preview}
+        </Text>
+      ) : null}
+
       {quote ? (
         <View style={styles.quote}>
-          <Text style={styles.quoteAuthor}>
+          <Text style={styles.quoteAuthor} numberOfLines={1}>
             {quote.name ?? quote.handle}
             {quote.handle ? ` @${quote.handle}` : ""}
           </Text>
@@ -100,11 +133,13 @@ export function ItemCard({ item }: { item: Card }) {
           ) : null}
         </View>
       ) : null}
-      {item.summary && !isSocial ? (
+
+      {item.summary && !isSocial && item.type !== "note" ? (
         <Text style={styles.summary} numberOfLines={2}>
           {item.summary}
         </Text>
       ) : null}
+
       {item.tags.length > 0 ? (
         <View style={styles.tagRow}>
           {item.tags.slice(0, 3).map((tag) => (
@@ -114,83 +149,133 @@ export function ItemCard({ item }: { item: Card }) {
           ))}
         </View>
       ) : null}
-      <Text style={styles.meta}>
-        {[item.sourceDomain, timeAgo(item.savedAt)].filter(Boolean).join(" · ")}
+
+      <Text style={styles.meta} numberOfLines={1}>
+        {[item.sourceDomain ?? (item.type === "note" ? "note" : undefined), timeAgo(item.savedAt)]
+          .filter(Boolean)
+          .join("  ·  ")}
       </Text>
-      <Pressable
-        style={styles.remove}
-        onPress={() => void removeItem({ id: item.id as Id<"items"> })}
-        hitSlop={12}
-      >
-        <Text style={styles.removeText}>✕</Text>
-      </Pressable>
-    </View>
+    </Pressable>
   );
-}
-
-function isTweetCard(
-  item: Card,
-): item is Card & {
-  embedJson: { quote?: { name?: string; handle?: string; text?: string } };
-} {
-  return item.type === "tweet" && typeof item.embedJson === "object";
-}
-
-function timeAgo(savedAt: number): string {
-  const seconds = Math.floor((Date.now() - savedAt) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(savedAt).toLocaleDateString();
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#e7e5e4",
+    borderColor: colors.border,
     padding: 12,
-    marginBottom: 12,
     gap: 8,
-    flex: 1,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+    overflow: "hidden",
   },
-  noteCard: { backgroundColor: "#fffbeb", borderColor: "#fde68a" },
-  pending: { alignItems: "center", paddingVertical: 28 },
-  pendingText: { color: "#a8a29e", fontSize: 12, marginTop: 8 },
-  failedText: { color: "#78716c", fontSize: 13 },
+  noteCard: {
+    backgroundColor: colors.noteBg,
+    borderColor: colors.noteBorder,
+  },
+  pressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.985 }],
+  },
+  pending: {
+    gap: 10,
+    paddingVertical: 18,
+  },
+  skeletonBar: {
+    height: 10,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceAlt,
+    width: "40%",
+  },
+  skeletonWide: { width: "90%" },
+  skeletonShort: { width: "65%" },
+  pendingText: {
+    color: colors.textFaint,
+    fontSize: 11,
+    fontStyle: "italic",
+    textAlign: "center",
+  },
+  failedTitle: { color: colors.textMuted, fontSize: 13, marginTop: 4 },
+  failedUrl: { color: colors.textFaint, fontSize: 11 },
+  authorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  author: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textMuted,
+    flexShrink: 1,
+  },
+  thumbWrap: {
+    marginHorizontal: -12,
+    marginBottom: 2,
+    position: "relative",
+  },
+  thumbBleed: { marginTop: -12 },
   thumbnail: {
     width: "100%",
-    height: 130,
-    borderRadius: 10,
-    backgroundColor: "#f5f5f4",
+    backgroundColor: colors.surfaceAlt,
   },
-  author: { fontSize: 13, fontWeight: "600", color: "#1c1917" },
-  title: { fontSize: 15, fontWeight: "600", color: "#1c1917" },
-  tweetText: { fontSize: 14, color: "#292524", lineHeight: 20 },
-  summary: { fontSize: 12, fontStyle: "italic", color: "#78716c" },
+  playOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  playCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(12,10,9,0.62)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  playIcon: { marginLeft: 3 },
+  title: {
+    fontFamily: fonts.serif,
+    fontSize: 15.5,
+    fontWeight: "600",
+    color: colors.text,
+    lineHeight: 21,
+  },
+  tweetText: {
+    fontSize: 14,
+    color: colors.textBody,
+    lineHeight: 20,
+  },
+  preview: {
+    fontSize: 13,
+    color: colors.textMuted,
+    lineHeight: 19,
+  },
+  summary: {
+    fontSize: 12.5,
+    fontStyle: "italic",
+    color: colors.textFaint,
+    lineHeight: 17,
+  },
   quote: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#e7e5e4",
-    borderRadius: 8,
-    padding: 8,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    padding: 9,
+    backgroundColor: colors.bg,
   },
-  quoteAuthor: { fontSize: 11, fontWeight: "600", color: "#44403c" },
-  quoteText: { fontSize: 12, color: "#57534e", marginTop: 4 },
+  quoteAuthor: { fontSize: 11, fontWeight: "600", color: colors.textBody },
+  quoteText: { fontSize: 12, color: colors.textMuted, marginTop: 4, lineHeight: 17 },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: {
-    backgroundColor: "#f5f5f4",
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.full,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
   },
-  tagText: { fontSize: 10, color: "#78716c" },
-  meta: { fontSize: 11, color: "#a8a29e" },
-  domain: { fontSize: 11, color: "#a8a29e" },
-  remove: { position: "absolute", top: 8, right: 10 },
-  removeText: { color: "#d6d3d1", fontSize: 13 },
+  tagText: { fontSize: 10.5, color: colors.textMuted, fontWeight: "500" },
+  meta: { fontSize: 11, color: colors.textFaint, marginTop: 1 },
 });

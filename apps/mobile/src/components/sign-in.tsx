@@ -3,16 +3,20 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
-  Pressable,
+  View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { colors, fonts, radius } from "../lib/theme";
 
 export function SignIn() {
   const { signIn } = useAuthActions();
   const [passphrase, setPassphrase] = useState("");
+  const [visible, setVisible] = useState(false);
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -36,20 +40,36 @@ export function SignIn() {
     >
       <Text style={styles.wordmark}>MindVault</Text>
       <Text style={styles.tagline}>Remember everything. Organize nothing.</Text>
-      <TextInput
-        value={passphrase}
-        onChangeText={setPassphrase}
-        placeholder="Your passphrase"
-        placeholderTextColor="#a8a29e"
-        secureTextEntry
-        autoCapitalize="none"
-        autoFocus
-        style={[styles.input, error && styles.inputError]}
-        onSubmitEditing={handleSubmit}
-      />
+      <View style={[styles.inputWrap, error && styles.inputError]}>
+        <TextInput
+          value={passphrase}
+          onChangeText={(v) => {
+            setPassphrase(v);
+            setError(false);
+          }}
+          placeholder="Your passphrase"
+          placeholderTextColor={colors.textFaint}
+          secureTextEntry={!visible}
+          autoCapitalize="none"
+          autoFocus
+          style={styles.input}
+          onSubmitEditing={handleSubmit}
+        />
+        <Pressable onPress={() => setVisible((v) => !v)} hitSlop={8}>
+          <Ionicons
+            name={visible ? "eye-off-outline" : "eye-outline"}
+            size={19}
+            color={colors.textFaint}
+          />
+        </Pressable>
+      </View>
       {error ? <Text style={styles.error}>Wrong passphrase.</Text> : null}
       <Pressable
-        style={[styles.button, (!passphrase || busy) && styles.buttonDisabled]}
+        style={({ pressed }) => [
+          styles.button,
+          (!passphrase || busy) && styles.buttonDisabled,
+          pressed && !(!passphrase || busy) && styles.buttonPressed,
+        ]}
         onPress={handleSubmit}
         disabled={!passphrase || busy}
       >
@@ -64,30 +84,54 @@ export function SignIn() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
-  wordmark: { fontSize: 34, fontWeight: "700", color: "#1c1917", letterSpacing: -0.5 },
-  tagline: { fontSize: 13, fontStyle: "italic", color: "#78716c", marginTop: 8 },
-  input: {
-    width: "100%",
-    borderWidth: 1,
-    borderColor: "#d6d3d1",
-    borderRadius: 999,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    marginTop: 40,
-    textAlign: "center",
-    fontSize: 15,
+  container: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+    backgroundColor: colors.bg,
   },
-  inputError: { borderColor: "#ef4444" },
-  error: { color: "#ef4444", fontSize: 13, marginTop: 10 },
+  wordmark: {
+    fontFamily: fonts.serif,
+    fontSize: 36,
+    fontWeight: "700",
+    color: colors.text,
+    letterSpacing: -0.5,
+  },
+  tagline: {
+    fontSize: 13,
+    fontStyle: "italic",
+    color: colors.textMuted,
+    marginTop: 10,
+  },
+  inputWrap: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.full,
+    paddingHorizontal: 20,
+    marginTop: 44,
+    backgroundColor: colors.surface,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 15,
+    fontSize: 15,
+    color: colors.text,
+  },
+  inputError: { borderColor: colors.danger },
+  error: { color: colors.danger, fontSize: 13, marginTop: 12 },
   button: {
     width: "100%",
-    backgroundColor: "#1c1917",
-    borderRadius: 999,
-    paddingVertical: 14,
+    backgroundColor: colors.inverse,
+    borderRadius: radius.full,
+    paddingVertical: 15,
     alignItems: "center",
-    marginTop: 14,
+    marginTop: 16,
   },
   buttonDisabled: { opacity: 0.4 },
+  buttonPressed: { opacity: 0.85 },
   buttonText: { color: "#fff", fontSize: 15, fontWeight: "600" },
 });
