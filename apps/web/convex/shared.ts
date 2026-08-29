@@ -8,7 +8,52 @@ export const ITEM_TYPES = [
   "image",
   "note",
   "link",
+  "document",
 ] as const;
+
+export const DOCUMENT_MAX_BYTES = 15 * 1024 * 1024;
+
+const DOCUMENT_EXTENSIONS = new Set([
+  "pdf",
+  "doc",
+  "docx",
+  "docm",
+  "ppt",
+  "pps",
+  "pot",
+  "pptx",
+  "pptm",
+  "ppsx",
+  "ppsm",
+  "xls",
+  "xlsx",
+  "xlsm",
+  "xlsb",
+  "odt",
+  "ods",
+  "odp",
+  "rtf",
+  "epub",
+  "csv",
+]);
+
+export function extensionOf(filename: string): string {
+  const base = filename.trim().split(/[/\\]/).pop() ?? filename;
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0) return "";
+  return base.slice(dot + 1).toLowerCase();
+}
+
+export function isDocumentFilename(filename: string): boolean {
+  return DOCUMENT_EXTENSIONS.has(extensionOf(filename));
+}
+
+export function titleFromFilename(filename: string): string {
+  const base = filename.trim().split(/[/\\]/).pop() ?? filename;
+  const dot = base.lastIndexOf(".");
+  const stem = dot > 0 ? base.slice(0, dot) : base;
+  return stem.trim().slice(0, 200) || "Untitled document";
+}
 
 export type ItemType = (typeof ITEM_TYPES)[number];
 

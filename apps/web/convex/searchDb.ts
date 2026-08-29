@@ -79,7 +79,10 @@ export const getByIds = internalQuery({
         title: doc.title,
         author: doc.author,
         sourceDomain: doc.sourceDomain,
-        preview: doc.contentText?.slice(0, 400),
+        preview:
+          doc.type === "document"
+            ? doc.contentText?.slice(0, 800)
+            : doc.contentText?.slice(0, 400),
         summary: doc.summary,
         tags,
         status: doc.status,

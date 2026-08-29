@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalQuery, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import schema from "./schema";
-import { detectType, domainOf } from "./shared";
+import { detectType, domainOf, titleFromFilename } from "./shared";
 
 export const captureInternal = internalMutation({
   args: { url: v.string() },
@@ -50,6 +50,25 @@ export const captureInternal = internalMutation({
     });
     await ctx.scheduler.runAfter(0, internal.pipeline.enrich, { itemId });
     return { itemId, outcome: "saved" as const };
+  },
+});
+
+export const insertPendingDocument = internalMutation({
+  args: {
+    storageId: v.id("_storage"),
+    filename: v.string(),
+  },
+  returns: v.id("items"),
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("items", {
+      type: "document",
+      title: titleFromFilename(args.filename),
+      fileStorageId: args.storageId,
+      status: "pending",
+      enrichAttempts: 0,
+      savedAt: Date.now(),
+      embedJson: { filename: args.filename },
+    });
   },
 });
 

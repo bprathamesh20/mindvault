@@ -7,7 +7,8 @@ export type Card = {
     | "youtube"
     | "image"
     | "note"
-    | "link";
+    | "link"
+    | "document";
   url?: string;
   title?: string;
   author?: string;
@@ -31,6 +32,7 @@ export type Detail = {
   contentText?: string;
   summary?: string;
   htmlUrl?: string;
+  fileUrl?: string;
   thumbnailUrl?: string;
   embedJson?: unknown;
   userNote?: string;

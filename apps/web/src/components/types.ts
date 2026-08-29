@@ -1,6 +1,14 @@
 export type Card = {
   id: string;
-  type: "article" | "tweet" | "instagram" | "youtube" | "image" | "note" | "link";
+  type:
+    | "article"
+    | "tweet"
+    | "instagram"
+    | "youtube"
+    | "image"
+    | "note"
+    | "link"
+    | "document";
   url?: string;
   title?: string;
   author?: string;

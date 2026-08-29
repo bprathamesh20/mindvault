@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { DocumentPreview } from "./DocumentPreview";
 
 function timeAgo(savedAt: number): string {
   const s = Math.floor((Date.now() - savedAt) / 1000);
@@ -28,6 +29,7 @@ type Detail = {
   contentText?: string;
   summary?: string;
   htmlUrl?: string;
+  fileUrl?: string;
   thumbnailUrl?: string;
   embedJson?: unknown;
   userNote?: string;
@@ -102,26 +104,39 @@ export function ItemModal({
       : {};
   const isYouTube = it.type === "youtube";
   const isInstagram = it.type === "instagram";
+  const isDocument = it.type === "document";
   const doneLabel =
     it.type === "instagram"
       ? "I've watched this reel"
       : isYouTube
         ? "I've watched this video"
-        : it.type === "article"
+        : it.type === "article" || isDocument
           ? "Mark as read"
           : "Mark as done";
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:p-8"
       onClick={onClose}
     >
       <div
-        className="mx-auto my-6 flex w-[min(1400px,94vw)] flex-col gap-0 overflow-hidden rounded-2xl border border-stone-200 bg-stone-50 shadow-2xl md:flex-row dark:border-[#2a2a31] dark:bg-[#17171b]"
+        className="relative my-auto flex max-h-[85dvh] w-[min(1400px,94vw)] flex-col overflow-hidden rounded-2xl border border-stone-200 bg-stone-50 shadow-2xl md:flex-row dark:border-[#2a2a31] dark:bg-[#17171b]"
         onClick={(e) => e.stopPropagation()}
       >
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-stone-300 bg-white text-xl leading-none text-stone-700 shadow-md transition hover:bg-stone-100 hover:text-stone-900 dark:border-[#3a3a42] dark:bg-[#2a2a31] dark:text-stone-200 dark:hover:bg-[#33333b]"
+        >
+          ×
+        </button>
         {/* Content pane */}
-        <div className="flex min-h-[50vh] flex-1 items-center justify-center p-6 md:p-10">
+        <div
+          className={`min-h-0 min-w-0 flex-1 overflow-y-auto p-6 md:p-10 ${
+            isDocument ? "items-start" : "flex items-center justify-center"
+          }`}
+        >
           {isYouTube && typeof embed.videoId === "string" ? (
             <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
               <iframe
@@ -153,6 +168,12 @@ export function ItemModal({
             <p className="whitespace-pre-wrap font-serif text-2xl leading-relaxed text-stone-700 dark:text-stone-200">
               {it.contentText}
             </p>
+          ) : isDocument ? (
+            <DocumentPreview
+              markdown={it.contentText}
+              embedJson={it.embedJson}
+              variant="reader"
+            />
           ) : (
             <div className="prose prose-stone max-w-none dark:prose-invert">
               {loaded && loaded.url === it.htmlUrl ? (
@@ -167,7 +188,7 @@ export function ItemModal({
         </div>
 
         {/* Side panel */}
-        <div className="flex w-full flex-col gap-5 border-t border-stone-200 p-6 md:w-[380px] md:border-l md:border-t-0 dark:border-[#2a2a31]">
+        <div className="flex min-h-0 w-full shrink-0 flex-col gap-5 overflow-y-auto border-t border-stone-200 p-6 pt-14 md:w-[380px] md:border-l md:border-t-0 md:pt-6 dark:border-[#2a2a31]">
           <div>
             <input
               value={titleDraft ?? it.title ?? ""}
@@ -290,6 +311,17 @@ export function ItemModal({
           </div>
 
           <div className="mt-auto flex items-center justify-end gap-3 pt-2">
+            {it.fileUrl && (
+              <a
+                href={it.fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                title="Download original"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 text-sm text-stone-500 transition hover:text-stone-800 dark:border-[#2a2a31] dark:text-[#9b9ba4] dark:hover:text-stone-100"
+              >
+                ↓
+              </a>
+            )}
             {it.url && (
               <a
                 href={it.url}
