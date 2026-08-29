@@ -4,6 +4,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { Card } from "./types";
+import { DocumentPreview } from "./DocumentPreview";
 
 export function ItemCard({
   item,
@@ -30,11 +31,15 @@ export function ItemCard({
         <p className="text-sm text-stone-500 dark:text-[#8b8b94]">
           Couldn&apos;t save this one.
         </p>
-        {item.url && (
+        {item.title ? (
+          <p className="mt-1 truncate text-xs text-stone-400 dark:text-[#5b5b64]">
+            {item.title}
+          </p>
+        ) : item.url ? (
           <p className="mt-1 truncate text-xs text-stone-400 dark:text-[#5b5b64]">
             {item.url}
           </p>
-        )}
+        ) : null}
       </div>
     );
   }
@@ -67,16 +72,26 @@ export function ItemCard({
       ) : null}
       <div className={item.thumbnailUrl ? "p-4 pt-3" : "p-4"}>
         {item.title && !isTweetCard(item) ? (
-          <h2 className="font-serif text-lg leading-snug text-stone-900 dark:text-[#e4e4e7]">
+          <h2 className="line-clamp-2 font-serif text-lg leading-snug text-stone-900 dark:text-[#e4e4e7]">
             {item.title}
           </h2>
+        ) : null}
+        {item.type === "document" ? (
+          <DocumentPreview
+            markdown={item.preview}
+            embedJson={item.embedJson}
+            variant="card"
+          />
         ) : null}
         {isTweetCard(item) && item.preview ? (
           <p className="text-sm leading-relaxed text-stone-700 dark:text-[#d4d4d8]">
             {item.preview}
           </p>
         ) : null}
-        {!item.thumbnailUrl && !isTweetCard(item) && item.preview ? (
+        {!item.thumbnailUrl &&
+        !isTweetCard(item) &&
+        item.type !== "document" &&
+        item.preview ? (
           <p className="mt-1.5 line-clamp-3 text-sm text-stone-500 dark:text-[#9b9ba4]">
             {item.preview}
           </p>

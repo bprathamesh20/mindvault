@@ -151,7 +151,7 @@ export function ItemCard({
       ) : null}
 
       <Text style={styles.meta} numberOfLines={1}>
-        {[item.sourceDomain ?? (item.type === "note" ? "note" : undefined), timeAgo(item.savedAt)]
+        {[item.sourceDomain ?? (item.type === "note" ? "note" : item.type === "document" ? "document" : undefined), timeAgo(item.savedAt)]
           .filter(Boolean)
           .join("  ·  ")}
       </Text>

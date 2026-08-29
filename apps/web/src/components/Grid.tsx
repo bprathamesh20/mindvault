@@ -11,6 +11,7 @@ const FILTERS = [
   { label: "Tweets", value: "tweet" },
   { label: "Instagram", value: "instagram" },
   { label: "YouTube", value: "youtube" },
+  { label: "Documents", value: "document" },
   { label: "Notes", value: "note" },
 ] as const;
 
@@ -21,7 +22,8 @@ type ItemType =
   | "youtube"
   | "image"
   | "note"
-  | "link";
+  | "link"
+  | "document";
 type Space = {
   id: string;
   name: string;

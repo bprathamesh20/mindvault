@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
+import { DocumentPreview } from "../../../components/DocumentPreview";
 
 export default function ItemPage() {
   const params = useParams<{ id: string }>();
@@ -104,7 +105,15 @@ export default function ItemPage() {
         </details>
       ) : null}
 
-      {item.type !== "youtube" && (
+      {item.type === "document" ? (
+        <div className="mt-10">
+          <DocumentPreview
+            markdown={item.contentText}
+            embedJson={item.embedJson}
+            variant="reader"
+          />
+        </div>
+      ) : item.type !== "youtube" ? (
         <article className="prose prose-stone mt-10 max-w-none dark:prose-invert prose-headings:font-serif prose-img:rounded-lg">
           {html ? (
             <div dangerouslySetInnerHTML={{ __html: html }} />
@@ -114,7 +123,7 @@ export default function ItemPage() {
             </p>
           )}
         </article>
-      )}
+      ) : null}
     </main>
   );
 }

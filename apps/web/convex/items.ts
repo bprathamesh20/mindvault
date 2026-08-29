@@ -7,8 +7,7 @@ import {
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
-  detectType,
-  domainOf,
+  isDocumentFilename,
   itemTypeValidator,
   normalizeUrl,
   removeToken,
@@ -76,7 +75,10 @@ export const list = query({
         title: doc.title,
         author: doc.author,
         sourceDomain: doc.sourceDomain,
-        preview: doc.contentText?.slice(0, 400),
+        preview:
+          doc.type === "document"
+            ? doc.contentText?.slice(0, 800)
+            : doc.contentText?.slice(0, 400),
         summary: doc.summary,
         tags,
         status: doc.status,
@@ -161,6 +163,36 @@ export const captureUrl = mutation({
   },
 });
 
+export const generateUploadUrl = mutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    await requireUserIdentity(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const captureFile = mutation({
+  args: {
+    storageId: v.id("_storage"),
+    filename: v.string(),
+  },
+  returns: v.id("items"),
+  handler: async (ctx, args) => {
+    await requireUserIdentity(ctx);
+    const filename = args.filename.trim().split(/[/\\]/).pop() ?? "";
+    if (!isDocumentFilename(filename)) {
+      throw new Error("That file type isn't supported");
+    }
+    const itemId: Id<"items"> = await ctx.runMutation(
+      internal.pipelineDb.insertPendingDocument,
+      { storageId: args.storageId, filename },
+    );
+    await ctx.scheduler.runAfter(0, internal.pipeline.enrich, { itemId });
+    return itemId;
+  },
+});
+
 export const captureNote = mutation({
   args: { text: v.string() },
   returns: v.id("items"),
@@ -193,6 +225,7 @@ export const get = query({
       contentText: v.optional(v.string()),
       summary: v.optional(v.string()),
       htmlUrl: v.optional(v.string()),
+      fileUrl: v.optional(v.string()),
       thumbnailUrl: v.optional(v.string()),
       embedJson: v.optional(v.any()),
       userNote: v.optional(v.string()),
@@ -208,6 +241,9 @@ export const get = query({
     if (!doc) return null;
     const htmlUrl = doc.htmlStorageId
       ? await ctx.storage.getUrl(doc.htmlStorageId)
+      : undefined;
+    const fileUrl = doc.fileStorageId
+      ? await ctx.storage.getUrl(doc.fileStorageId)
       : undefined;
     const thumbnailUrl = doc.thumbnailStorageId
       ? await ctx.storage.getUrl(doc.thumbnailStorageId)
@@ -231,6 +267,7 @@ export const get = query({
       contentText: doc.contentText,
       summary: doc.summary,
       htmlUrl: htmlUrl ?? undefined,
+      fileUrl: fileUrl ?? undefined,
       thumbnailUrl: thumbnailUrl ?? undefined,
       embedJson: doc.embedJson,
       userNote: doc.userNote,
@@ -390,6 +427,7 @@ export const removeItem = mutation({
     if (!doc) return null;
     if (doc.thumbnailStorageId) await ctx.storage.delete(doc.thumbnailStorageId);
     if (doc.htmlStorageId) await ctx.storage.delete(doc.htmlStorageId);
+    if (doc.fileStorageId) await ctx.storage.delete(doc.fileStorageId);
     await ctx.db.delete(args.id);
     return null;
   },

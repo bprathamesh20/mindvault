@@ -7,7 +7,13 @@ import * as cheerio from "cheerio";
 import { parseHTML } from "linkedom";
 import { Readability } from "@mozilla/readability";
 import { YoutubeTranscript } from "youtube-transcript";
+import {
+  formatFromBytes,
+  formatFromExtension,
+  toMarkdownBytes,
+} from "@firecrawl/anydoc";
 import type { Id } from "./_generated/dataModel";
+import { DOCUMENT_MAX_BYTES, extensionOf } from "./shared";
 
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
@@ -293,6 +299,54 @@ async function extractArticle(url: URL): Promise<Extracted> {
   };
 }
 
+function convertFailureMessage(error: unknown): string {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code: unknown }).code)
+      : undefined;
+  if (code === "needsOcr") {
+    return "This PDF looks scanned. Set FIRECRAWL_API_KEY to OCR it, or upload a text-based PDF.";
+  }
+  if (code === "encrypted") return "This file is password-protected";
+  if (code === "unsupported") return "That file type couldn't be converted";
+  if (code === "malformed")
+    return "That file doesn't look like a readable document";
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function extractUploadedDocument(args: {
+  bytes: Uint8Array;
+  filename: string;
+}): Promise<{ text: string; format?: string }> {
+  const ext = extensionOf(args.filename);
+  const format =
+    formatFromExtension(ext) ?? formatFromBytes(args.bytes) ?? undefined;
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  const markdown = await toMarkdownBytes(
+    args.bytes,
+    format,
+    apiKey ? { ocr: "hosted", apiKey } : undefined,
+  );
+  const text = markdown.trim();
+  if (!text) throw new Error("No text could be extracted from that file");
+  return { text, format: format ?? (ext || undefined) };
+}
+
+function filenameFromItem(item: {
+  title?: string;
+  embedJson?: unknown;
+}): string {
+  if (
+    item.embedJson &&
+    typeof item.embedJson === "object" &&
+    "filename" in item.embedJson &&
+    typeof (item.embedJson as { filename: unknown }).filename === "string"
+  ) {
+    return (item.embedJson as { filename: string }).filename;
+  }
+  return item.title ?? "document";
+}
+
 export const enrich = internalAction({
   args: { itemId: v.id("items") },
   returns: v.null(),
@@ -301,9 +355,37 @@ export const enrich = internalAction({
       itemId: args.itemId,
     });
     if (!item) return null;
-    if (!item.url) return null;
 
     try {
+      if (item.fileStorageId) {
+        const blob = await ctx.storage.get(item.fileStorageId);
+        if (!blob) throw new Error("Uploaded file is missing");
+        const buffer = await blob.arrayBuffer();
+        if (buffer.byteLength === 0) throw new Error("File is empty");
+        if (buffer.byteLength > DOCUMENT_MAX_BYTES) {
+          throw new Error("File is too large (max 15 MB)");
+        }
+        const filename = filenameFromItem(item);
+        const extracted = await extractUploadedDocument({
+          bytes: new Uint8Array(buffer),
+          filename,
+        });
+        const prior =
+          item.embedJson && typeof item.embedJson === "object"
+            ? (item.embedJson as Record<string, unknown>)
+            : {};
+        await ctx.runMutation(internal.pipelineDb.persistMeta, {
+          itemId: args.itemId,
+          title: item.title,
+          contentText: extracted.text.slice(0, 50000),
+          sourceDomain: extracted.format,
+          embedJson: { ...prior, format: extracted.format },
+        });
+        return null;
+      }
+
+      if (!item.url) return null;
+
       const url = new URL(item.url);
       const host = url.hostname.replace(/^(www|m)\./, "");
       let extracted: Extracted;
@@ -357,7 +439,7 @@ export const enrich = internalAction({
     } catch (error) {
       await ctx.runMutation(internal.pipelineDb.markFailed, {
         itemId: args.itemId,
-        reason: error instanceof Error ? error.message : String(error),
+        reason: convertFailureMessage(error),
       });
     }
     return null;

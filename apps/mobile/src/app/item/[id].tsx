@@ -124,7 +124,7 @@ function ItemScreen({ itemId }: { itemId: string }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header url={it.url} title={it.title} canShare />
+      <Header url={it.url ?? it.fileUrl} title={it.title} canShare />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -187,7 +187,7 @@ function ItemScreen({ itemId }: { itemId: string }) {
                 {p}
               </Text>
             ))}
-            <OriginalLink url={it.url} />
+            <OriginalLink url={it.url ?? it.fileUrl} />
           </View>
         ) : (
           <View style={styles.failedBox}>
