@@ -64,7 +64,8 @@ deployments — set them explicitly with the CLI. Use the `"NAME=$VALUE"` form
 | `PASSPHRASE` | the only credential (single-user app) |
 | `JWT_PRIVATE_KEY`, `JWKS`, `SITE_URL` | Convex Auth signing (generate headlessly with `jose`, see .agents/skills/convex-auth) |
 | `OPENROUTER_API_KEY` | one key for chat + embeddings |
-| `CHAT_MODEL` | default `deepseek/deepseek-v4-flash` |
+| `CHAT_MODEL` | default `deepseek/deepseek-v4-flash` (summary + tags) |
+| `ASK_MODEL` | default `z-ai/glm-5.3-flash` (Ask-my-vault answers) |
 | `EMBEDDING_MODEL` | `openai/text-embedding-3-small` (1536 dims — must match schema vectorIndex) |
 | `NEXT_PUBLIC_CONVEX_URL` | written by `npx convex dev` into `apps/web/.env.local` |
 | `EXPO_PUBLIC_CONVEX_URL` | in `apps/mobile/.env.local`; emulator: `http://10.0.2.2:3210` |
@@ -128,6 +129,10 @@ Re-pasting a URL: `duplicate` if ready, `retrying` (reset+re-enrich) if failed.
 - Chat: `deepseek/deepseek-v4-flash` is a **reasoning model** — emits ~500
   hidden reasoning tokens, so `max_tokens` must be ≥2000 (300 truncates JSON).
   Cheaper non-reasoning alternative verified working: `qwen/qwen3.7-flash`.
+- Ask: `z-ai/glm-5.3-flash` answers over hybrid-search hits (`convex/ask.ts`),
+  called with `reasoning: { effort: "low" }` and `max_tokens: 2000`+ for the
+  same reason. Failures return a plain-language answer rather than throwing —
+  Convex redacts thrown error messages on production deployments.
 - Embeddings: `openai/text-embedding-3-small` via OpenRouter `/api/v1/embeddings`
   (batch-capable, deterministic → cacheable by URL hash).
 

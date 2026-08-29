@@ -21,3 +21,5 @@ export type Card = {
   thumbnailUrl?: string;
   embedJson?: unknown;
 };
+
+export type ItemType = Card["type"];
