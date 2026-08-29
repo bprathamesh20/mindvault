@@ -16,13 +16,19 @@ function isDocumentFilename(filename: string): boolean {
   return DOCUMENT_ACCEPT.split(",").some((a) => a.slice(1) === ext);
 }
 
-export function CaptureFab() {
+export function CaptureFab({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const captureUrl = useMutation(api.items.captureUrl);
   const captureNote = useMutation(api.items.captureNote);
   const generateUploadUrl = useMutation(api.items.generateUploadUrl);
   const captureFile = useMutation(api.items.captureFile);
   const fileInput = useRef<HTMLInputElement>(null);
-  const [open, setOpen] = useState(false);
+  const setOpen = onOpenChange;
   const [draft, setDraft] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

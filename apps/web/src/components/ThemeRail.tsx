@@ -1,20 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getTheme, onThemeChange, toggleTheme, type Theme } from "./theme";
 
 
 export function ThemeRail({ onSerendipity }: { onSerendipity: () => void }) {
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
-    if (typeof window === "undefined") return "dark";
-    return localStorage.getItem("mv-theme") === "light" ? "light" : "dark";
-  });
+  const [theme, setThemeState] = useState<Theme>(getTheme);
 
-  function toggleTheme() {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    localStorage.setItem("mv-theme", next);
-    document.documentElement.classList.toggle("dark", next === "dark");
-  }
+  // The command menu can flip the theme too — follow whoever did it.
+  useEffect(() => onThemeChange(setThemeState), []);
 
   return (
     <aside className="fixed left-0 top-0 z-30 hidden h-full w-16 flex-col items-center justify-between py-6 md:flex">
@@ -35,7 +29,7 @@ export function ThemeRail({ onSerendipity }: { onSerendipity: () => void }) {
 
       <div className="flex flex-col items-center gap-5">
         <button
-          onClick={toggleTheme}
+          onClick={() => toggleTheme()}
           title="Toggle theme"
           className="text-lg text-stone-400 transition hover:text-stone-700 dark:text-[#8b8b94] dark:hover:text-stone-200"
         >

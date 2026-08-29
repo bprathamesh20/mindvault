@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { ItemCard } from "./ItemCard";
+import { MASONRY } from "./layout";
+import type { ItemType } from "./types";
 
 const FILTERS = [
   { label: "All", value: undefined },
@@ -15,15 +17,6 @@ const FILTERS = [
   { label: "Notes", value: "note" },
 ] as const;
 
-type ItemType =
-  | "article"
-  | "tweet"
-  | "instagram"
-  | "youtube"
-  | "image"
-  | "note"
-  | "link"
-  | "document";
 type Space = {
   id: string;
   name: string;
@@ -33,14 +26,18 @@ type Space = {
 
 export default function Grid({
   onOpen,
+  type,
+  onTypeChange,
 }: {
   onOpen?: (id: string) => void;
+  // Owned by the page so the command menu can drive it too.
+  type: ItemType | undefined;
+  onTypeChange: (type: ItemType | undefined) => void;
 }) {
   const spaces = useQuery(api.spaces.list);
   const createSpace = useMutation(api.spaces.create);
   const removeSpace = useMutation(api.spaces.remove);
 
-  const [type, setType] = useState<ItemType | undefined>(undefined);
   const [tag, setTag] = useState<string | null>(null);
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null);
   const [naming, setNaming] = useState(false);
@@ -55,7 +52,7 @@ export default function Grid({
   const filterActive = type !== undefined || tag !== null;
 
   function applyType(value: ItemType | undefined) {
-    setType(value);
+    onTypeChange(value);
     setActiveSpaceId(null);
   }
   function applyTag(next: string | null) {
@@ -100,7 +97,7 @@ export default function Grid({
                   : "border-stone-200 text-stone-500 hover:border-stone-400 dark:border-[#2a2a31] dark:text-[#8b8b94] dark:hover:border-[#4a4a55]"
               }`}
             >
-              <button onClick={() => { setType(s.type); setTag(s.tag ?? null); setActiveSpaceId(s.id); }}>
+              <button onClick={() => { onTypeChange(s.type); setTag(s.tag ?? null); setActiveSpaceId(s.id); }}>
                 ✦ {s.name}
               </button>
               {activeSpaceId === s.id && (
@@ -159,7 +156,7 @@ export default function Grid({
           </p>
         </div>
       ) : (
-        <div className="columns-1 gap-5 sm:columns-2 lg:columns-3 2xl:columns-4">
+        <div className={MASONRY}>
           {results.map((item) => (
             <ItemCard key={item.id} item={item} onOpen={onOpen} />
           ))}
