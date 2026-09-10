@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { useCardCache, writeCardCache } from "../lib/card-cache";
+import { peekCardCache, writeCardCache } from "../lib/card-cache";
 import { ItemCard } from "./ItemCard";
 import { MASONRY } from "./layout";
 import type { Card, ItemType } from "./types";
@@ -50,7 +50,7 @@ export default function Grid({
   const [naming, setNaming] = useState(false);
   const [spaceName, setSpaceName] = useState("");
 
-  const cached = useCardCache();
+  const [cached] = useState(peekCardCache);
   const { results, status, loadMore, isLoading } = usePaginatedQuery(
     api.items.list,
     { type, tag: tag ?? undefined },

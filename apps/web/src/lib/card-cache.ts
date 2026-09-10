@@ -5,6 +5,7 @@ const KEY = "mv-cards";
 const EMPTY: Card[] = [];
 const listeners = new Set<() => void>();
 let snapshot: Card[] = EMPTY;
+let lastJson = "";
 let loaded = false;
 
 function parseCache(): Card[] {
@@ -19,15 +20,25 @@ function parseCache(): Card[] {
   }
 }
 
+function hydrate() {
+  if (loaded) return;
+  snapshot = parseCache();
+  lastJson = snapshot === EMPTY ? "" : JSON.stringify(snapshot);
+  loaded = true;
+}
+
 function emit() {
   for (const listener of listeners) listener();
 }
 
 export function writeCardCache(cards: Card[]) {
   const next = cards.slice(0, 24);
+  const json = next.length === 0 ? "" : JSON.stringify(next);
+  if (json === lastJson) return;
+  lastJson = json;
   try {
     if (next.length === 0) localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, JSON.stringify(next));
+    else localStorage.setItem(KEY, json);
   } catch {
     /* quota */
   }
@@ -36,21 +47,20 @@ export function writeCardCache(cards: Card[]) {
   emit();
 }
 
-export function readCardCache(): Card[] {
+export function peekCardCache(): Card[] {
+  if (typeof window !== "undefined") hydrate();
   return snapshot;
 }
 
 export function useCardCache(): Card[] {
   return useSyncExternalStore(
     (onStoreChange) => {
-      if (!loaded) {
-        snapshot = parseCache();
-        loaded = true;
-      }
+      hydrate();
       listeners.add(onStoreChange);
       const onStorage = (e: StorageEvent) => {
         if (e.key !== KEY && e.key !== null) return;
-        snapshot = parseCache();
+        loaded = false;
+        hydrate();
         onStoreChange();
       };
       window.addEventListener("storage", onStorage);
@@ -59,7 +69,7 @@ export function useCardCache(): Card[] {
         window.removeEventListener("storage", onStorage);
       };
     },
-    readCardCache,
+    peekCardCache,
     () => EMPTY,
   );
 }
