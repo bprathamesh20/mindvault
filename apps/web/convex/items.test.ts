@@ -12,6 +12,21 @@ function tAuth() {
   });
 }
 
+function webpFile(tag: string, payload: Uint8Array): ArrayBuffer {
+  const out = new Uint8Array(20 + payload.length);
+  out.set([0x52, 0x49, 0x46, 0x46], 0);
+  const view = new DataView(out.buffer);
+  view.setUint32(4, 4 + 8 + payload.length, true);
+  out.set([0x57, 0x45, 0x42, 0x50], 8);
+  out.set(
+    [tag.charCodeAt(0), tag.charCodeAt(1), tag.charCodeAt(2), tag.charCodeAt(3)],
+    12,
+  );
+  view.setUint32(16, payload.length, true);
+  out.set(payload, 20);
+  return out.buffer;
+}
+
 describe("imageSize", () => {
   test("reads PNG IHDR dimensions", async () => {
     const { imageSize } = await import("./imageSize");
@@ -24,6 +39,49 @@ describe("imageSize", () => {
     view.setUint32(16, 640);
     view.setUint32(20, 360);
     expect(imageSize(png.buffer)).toEqual({ width: 640, height: 360 });
+  });
+
+  test("reads lossy VP8 WebP dimensions", async () => {
+    const { imageSize } = await import("./imageSize");
+    const payload = new Uint8Array(10);
+    payload[3] = 0x9d;
+    payload[4] = 0x01;
+    payload[5] = 0x2a;
+    const view = new DataView(payload.buffer);
+    view.setUint16(6, 550, true);
+    view.setUint16(8, 368, true);
+    expect(imageSize(webpFile("VP8 ", payload))).toEqual({
+      width: 550,
+      height: 368,
+    });
+  });
+
+  test("reads lossless VP8L WebP dimensions", async () => {
+    const { imageSize } = await import("./imageSize");
+    const payload = new Uint8Array(5);
+    payload[0] = 0x2f;
+    const bits = (400 - 1) | ((301 - 1) << 14);
+    const view = new DataView(payload.buffer);
+    view.setUint32(1, bits, true);
+    expect(imageSize(webpFile("VP8L", payload))).toEqual({
+      width: 400,
+      height: 301,
+    });
+  });
+
+  test("reads extended VP8X WebP dimensions", async () => {
+    const { imageSize } = await import("./imageSize");
+    const payload = new Uint8Array(10);
+    payload[4] = 399 & 0xff;
+    payload[5] = (399 >> 8) & 0xff;
+    payload[6] = (399 >> 16) & 0xff;
+    payload[7] = 399 & 0xff;
+    payload[8] = (399 >> 8) & 0xff;
+    payload[9] = (399 >> 16) & 0xff;
+    expect(imageSize(webpFile("VP8X", payload))).toEqual({
+      width: 400,
+      height: 400,
+    });
   });
 
   test("returns undefined for garbage", async () => {

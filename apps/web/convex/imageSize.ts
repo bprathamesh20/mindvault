@@ -15,6 +15,10 @@ export function imageSize(
     while (i < b.length - 8) {
       if (b[i] !== 0xff) break;
       const marker = b[i + 1];
+      if (marker === 0xff) {
+        i += 1;
+        continue;
+      }
       const len = (b[i + 2] << 8) + b[i + 3];
       if (
         marker >= 0xc0 &&
@@ -40,22 +44,34 @@ export function imageSize(
     b[10] === 0x42 &&
     b[11] === 0x50
   ) {
-    if (b[12] === 0x56 && b[13] === 0x50 && b[14] === 0x38 && b[15] === 0x20) {
-      const code = view.getUint32(21, true);
-      return { width: code & 0x3fff, height: (code >> 16) & 0x3fff };
-    }
-    if (b[12] === 0x56 && b[13] === 0x50 && b[14] === 0x38 && b[15] === 0x4c) {
+    const tag = String.fromCharCode(b[12], b[13], b[14], b[15]);
+    if (tag === "VP8 " && b.length >= 30) {
       return {
-        width: (view.getUint16(21, true) & 0x3fff) + 1,
-        height: (view.getUint16(23, true) & 0x3fff) + 1,
+        width: view.getUint16(26, true) & 0x3fff,
+        height: view.getUint16(28, true) & 0x3fff,
       };
     }
-    if (b[12] === 0x56 && b[13] === 0x50 && b[14] === 0x38 && b[15] === 0x58) {
+    if (tag === "VP8L" && b.length >= 25) {
+      const bits = view.getUint32(21, true);
       return {
-        width: view.getUint32(24, true) + 1,
-        height: view.getUint32(28, true) + 1,
+        width: (bits & 0x3fff) + 1,
+        height: ((bits >> 14) & 0x3fff) + 1,
+      };
+    }
+    if (tag === "VP8X" && b.length >= 30) {
+      return {
+        width: u24(view, 24) + 1,
+        height: u24(view, 27) + 1,
       };
     }
   }
   return undefined;
+}
+
+function u24(view: DataView, offset: number): number {
+  return (
+    view.getUint8(offset) |
+    (view.getUint8(offset + 1) << 8) |
+    (view.getUint8(offset + 2) << 16)
+  );
 }

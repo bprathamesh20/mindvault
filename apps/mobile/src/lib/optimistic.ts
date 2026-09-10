@@ -15,6 +15,15 @@ export function optimisticRemoveItem(
       });
     }
   }
+  for (const q of localStore.getAllQueries(api.search.keyword)) {
+    if (Array.isArray(q.value)) {
+      localStore.setQuery(
+        api.search.keyword,
+        q.args,
+        q.value.filter((c) => c.id !== id),
+      );
+    }
+  }
 }
 
 export function optimisticPatchItem(

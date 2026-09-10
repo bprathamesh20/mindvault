@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { useCardCache, writeCardCache } from "../lib/card-cache";
 import { ItemCard } from "./ItemCard";
 import { MASONRY } from "./layout";
 import type { Card, ItemType } from "./types";
@@ -49,6 +50,7 @@ export default function Grid({
   const [naming, setNaming] = useState(false);
   const [spaceName, setSpaceName] = useState("");
 
+  const cached = useCardCache();
   const { results, status, loadMore, isLoading } = usePaginatedQuery(
     api.items.list,
     { type, tag: tag ?? undefined },
@@ -57,12 +59,11 @@ export default function Grid({
 
   useEffect(() => {
     if (results.length === 0 || type || tag) return;
-    try {
-      localStorage.setItem("mv-cards", JSON.stringify(results.slice(0, 24)));
-    } catch {
-      /* quota */
-    }
+    writeCardCache(results);
   }, [results, type, tag]);
+
+  const cards =
+    results.length > 0 ? results : !type && !tag ? cached : [];
 
   const filterActive = type !== undefined || tag !== null;
 
@@ -164,9 +165,9 @@ export default function Grid({
         </div>
       )}
 
-      {results.length === 0 && isLoading ? (
+      {cards.length === 0 && isLoading ? (
         <GridSkeleton />
-      ) : results.length === 0 ? (
+      ) : cards.length === 0 ? (
         <div className="py-24 text-center">
           <p className="font-serif text-2xl italic text-stone-400 dark:text-[#6b6b75]">
             {filterActive ? "Nothing here yet." : "Your mind is empty."}
@@ -174,7 +175,7 @@ export default function Grid({
         </div>
       ) : (
         <div className={MASONRY}>
-          {results.map((item) => (
+          {cards.map((item) => (
             <ItemCard key={item.id} item={item} onOpen={onOpen} />
           ))}
         </div>

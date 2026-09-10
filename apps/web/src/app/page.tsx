@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useCardCache } from "../lib/card-cache";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { useAction, useQuery } from "convex/react";
@@ -329,10 +330,6 @@ export default function Home() {
         <SerendipityOpener
           nonce={serNonce}
           onClose={() => setSerNonce(null)}
-          onOpen={(id) => {
-            setSerNonce(null);
-            setOpen({ id });
-          }}
         />
       ) : open ? (
         <ItemModal
@@ -345,20 +342,8 @@ export default function Home() {
   );
 }
 
-function readCachedCards(): Card[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem("mv-cards");
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as Card[];
-    return Array.isArray(parsed) ? parsed.slice(0, 24) : [];
-  } catch {
-    return [];
-  }
-}
-
 function CachedGrid() {
-  const [cards] = useState(readCachedCards);
+  const cards = useCardCache();
   if (cards.length === 0) return <GridSkeleton />;
   return (
     <div className={MASONRY}>
@@ -375,7 +360,6 @@ function SerendipityOpener({
 }: {
   nonce: number;
   onClose: () => void;
-  onOpen?: (id: string) => void;
 }) {
   const res = useQuery(api.items.serendipity, { nonce });
   if (res === undefined)

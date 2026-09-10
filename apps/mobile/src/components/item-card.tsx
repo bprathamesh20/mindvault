@@ -54,8 +54,7 @@ export const ItemCard = memo(function ItemCard({
   const isTweet = item.type === "tweet";
   const quote =
     isTweet && typeof item.embedJson === "object" && item.embedJson !== null
-      ? (item.embedJson as { quote?: { name?: string; handle?: string; text?: string } })
-          .quote
+      ? (item.embedJson as { quote?: { name?: string; handle?: string; text?: string } }).quote
       : undefined;
   const thumbAspect =
     item.thumbWidth && item.thumbHeight

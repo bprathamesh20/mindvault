@@ -186,7 +186,15 @@ function ItemScreen({ itemId }: { itemId: string }) {
             style={({ pressed }) => [styles.heroWrap, pressed && styles.pressed]}
             onPress={() => it.url && void Linking.openURL(it.url)}
           >
-            {it.thumbnailUrl ? (
+            {typeof embed.videoId === "string" ? (
+              <Image
+                source={{
+                  uri: `https://i.ytimg.com/vi/${embed.videoId}/maxresdefault.jpg`,
+                }}
+                style={[styles.heroImage, styles.heroVideo]}
+                contentFit="cover"
+              />
+            ) : it.thumbnailUrl ? (
               <Image
                 source={{ uri: it.thumbnailUrl }}
                 style={[styles.heroImage, styles.heroVideo]}

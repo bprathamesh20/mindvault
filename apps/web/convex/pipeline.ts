@@ -214,7 +214,7 @@ async function extractYouTube(url: URL): Promise<Extracted> {
     title,
     author: author ? `${author} (YouTube)` : undefined,
     text: title,
-    thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
     embedJson: { provider: "youtube", videoId, kind },
   };
 }

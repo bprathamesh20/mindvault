@@ -142,16 +142,18 @@ export function ItemCard({
           {[item.sourceDomain, timeAgo(item.savedAt)].filter(Boolean).join(" · ")}
         </p>
       </div>
-      <button
-        aria-label="Delete"
-        onClick={(e) => {
-          e.stopPropagation();
-          void removeItem({ id: item.id as Id<"items"> });
-        }}
-        className="absolute right-2 top-2 rounded-full opacity-0 transition hover:text-red-400 [div.group:hover>&]:opacity-100"
-      >
-        ✕
-      </button>
+      {onOpen ? (
+        <button
+          aria-label="Delete"
+          onClick={(e) => {
+            e.stopPropagation();
+            void removeItem({ id: item.id as Id<"items"> });
+          }}
+          className="absolute right-2 top-2 rounded-full opacity-0 transition hover:text-red-400 [div.group:hover>&]:opacity-100"
+        >
+          ✕
+        </button>
+      ) : null}
     </div>
   );
 }

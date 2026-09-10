@@ -142,7 +142,6 @@ export const replaceThumb = internalMutation({
     thumbnailStorageId: v.id("_storage"),
     thumbWidth: v.number(),
     thumbHeight: v.number(),
-    previousStorageId: v.optional(v.id("_storage")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -153,12 +152,6 @@ export const replaceThumb = internalMutation({
       thumbWidth: args.thumbWidth,
       thumbHeight: args.thumbHeight,
     });
-    if (
-      args.previousStorageId &&
-      args.previousStorageId !== args.thumbnailStorageId
-    ) {
-      await ctx.storage.delete(args.previousStorageId);
-    }
     return null;
   },
 });

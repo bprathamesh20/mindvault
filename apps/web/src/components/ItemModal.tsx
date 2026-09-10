@@ -207,7 +207,17 @@ export function ItemModal({
                 onClick={() => setPlayEmbed(true)}
                 className="relative aspect-video w-full overflow-hidden rounded-xl bg-black"
               >
-                {it.thumbnailUrl ? (
+                {typeof embed.videoId === "string" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`https://i.ytimg.com/vi/${embed.videoId}/maxresdefault.jpg`}
+                    alt={it.title ?? ""}
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = `https://i.ytimg.com/vi/${embed.videoId}/mqdefault.jpg`;
+                    }}
+                  />
+                ) : it.thumbnailUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={it.thumbnailUrl}
