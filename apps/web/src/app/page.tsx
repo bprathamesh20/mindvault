@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useCardCache } from "../lib/card-cache";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useQueries, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import SignIn from "../components/SignIn";
 import { CaptureFab } from "../components/CaptureFab";
@@ -51,12 +51,13 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [query, mode]);
 
-  const keywordHits = useQuery(
-    api.search.keyword,
+  const keywordMap = useQueries(
     isAuthenticated && mode === "search" && debounced.length >= 2
-      ? { q: debounced }
-      : "skip",
+      ? { k: { query: api.search.keyword, args: { q: debounced } } }
+      : {},
   );
+  const keywordRaw = keywordMap.k;
+  const keywordHits = Array.isArray(keywordRaw) ? keywordRaw : undefined;
 
   useEffect(() => {
     if (mode !== "search" || debounced.length < 2) return;

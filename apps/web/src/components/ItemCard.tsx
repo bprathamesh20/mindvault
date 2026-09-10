@@ -50,6 +50,7 @@ export function ItemCard({
   const isSocial = item.type === "tweet" || item.type === "instagram";
   const quote =
     isTweetCard(item) ? item.embedJson?.quote : undefined;
+  const thumbSize = saneThumb(item.thumbWidth, item.thumbHeight);
 
   return (
     <div
@@ -70,14 +71,14 @@ export function ItemCard({
         <img
           src={item.thumbnailUrl}
           alt={item.title ?? ""}
-          width={item.thumbWidth}
-          height={item.thumbHeight}
+          width={thumbSize?.w}
+          height={thumbSize?.h}
           loading="lazy"
           decoding="async"
           className="mt-3 max-h-[420px] w-full object-cover brightness-[0.98] first:mt-0 dark:brightness-[0.85]"
           style={
-            item.thumbWidth && item.thumbHeight
-              ? { aspectRatio: `${item.thumbWidth} / ${item.thumbHeight}` }
+            thumbSize
+              ? { aspectRatio: `${thumbSize.w} / ${thumbSize.h}` }
               : undefined
           }
         />
@@ -126,9 +127,9 @@ export function ItemCard({
             {item.summary}
           </p>
         ) : null}
-        {item.tags.length > 0 ? (
+        {(item.tags ?? []).length > 0 ? (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {item.tags.slice(0, 3).map((tag) => (
+            {(item.tags ?? []).slice(0, 3).map((tag) => (
               <span
                 key={tag}
                 className="rounded-full border border-stone-200 px-2 py-0.5 text-[11px] text-stone-500 dark:border-[#2a2a31] dark:text-[#8b8b94]"
@@ -156,6 +157,23 @@ export function ItemCard({
       ) : null}
     </div>
   );
+}
+
+function saneThumb(
+  width?: number,
+  height?: number,
+): { w: number; h: number } | undefined {
+  if (
+    !width ||
+    !height ||
+    width < 1 ||
+    height < 1 ||
+    width > 8192 ||
+    height > 8192
+  ) {
+    return undefined;
+  }
+  return { w: width, h: height };
 }
 
 function isTweetCard(
