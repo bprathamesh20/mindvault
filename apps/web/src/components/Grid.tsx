@@ -58,12 +58,16 @@ export default function Grid({
   );
 
   useEffect(() => {
-    if (results.length === 0 || type || tag) return;
+    if (type || tag || isLoading) return;
     writeCardCache(results);
-  }, [results, type, tag]);
+  }, [results, type, tag, isLoading]);
 
   const cards =
-    results.length > 0 ? results : !type && !tag ? cached : [];
+    results.length > 0
+      ? results
+      : isLoading && !type && !tag
+        ? cached
+        : [];
 
   const filterActive = type !== undefined || tag !== null;
 

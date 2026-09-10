@@ -81,6 +81,7 @@ function ItemScreen({ itemId }: { itemId: string }) {
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const [addingTag, setAddingTag] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
+  const [ytHiResFailed, setYtHiResFailed] = useState(false);
 
   if (item === null)
     return (
@@ -126,6 +127,12 @@ function ItemScreen({ itemId }: { itemId: string }) {
   const isYouTube = it.type === "youtube";
   const isInstagram = it.type === "instagram";
   const isNote = it.type === "note";
+  const ytId = typeof embed.videoId === "string" ? embed.videoId : undefined;
+  const ytPoster = ytId
+    ? ytHiResFailed
+      ? (it.thumbnailUrl ?? `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`)
+      : `https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg`
+    : it.thumbnailUrl;
   const doneLabel =
     it.type === "instagram"
       ? "I've watched this reel"
@@ -186,19 +193,14 @@ function ItemScreen({ itemId }: { itemId: string }) {
             style={({ pressed }) => [styles.heroWrap, pressed && styles.pressed]}
             onPress={() => it.url && void Linking.openURL(it.url)}
           >
-            {typeof embed.videoId === "string" ? (
+            {ytPoster ? (
               <Image
-                source={{
-                  uri: `https://i.ytimg.com/vi/${embed.videoId}/maxresdefault.jpg`,
+                source={{ uri: ytPoster }}
+                style={[styles.heroImage, styles.heroVideo]}
+                contentFit="cover"
+                onError={() => {
+                  if (!ytHiResFailed) setYtHiResFailed(true);
                 }}
-                style={[styles.heroImage, styles.heroVideo]}
-                contentFit="cover"
-              />
-            ) : it.thumbnailUrl ? (
-              <Image
-                source={{ uri: it.thumbnailUrl }}
-                style={[styles.heroImage, styles.heroVideo]}
-                contentFit="cover"
               />
             ) : (
               <View style={[styles.heroImage, styles.heroVideo, styles.heroPlaceholder]}>
