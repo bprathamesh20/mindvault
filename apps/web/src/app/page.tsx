@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCardCache } from "../lib/card-cache";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
@@ -17,6 +17,8 @@ import { ItemModal } from "../components/ItemModal";
 import { DOCK_AFTER_PX, MASONRY } from "../components/layout";
 import { toggleTheme } from "../components/theme";
 import type { Card, ItemType } from "../components/types";
+
+const NO_QUERIES = {};
 
 export default function Home() {
   const { isLoading, isAuthenticated } = useConvexAuth();
@@ -51,11 +53,14 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [query, mode]);
 
-  const keywordMap = useQueries(
-    isAuthenticated && mode === "search" && debounced.length >= 2
-      ? { k: { query: api.search.keyword, args: { q: debounced } } }
-      : {},
+  const keywordQueries = useMemo(
+    () =>
+      isAuthenticated && mode === "search" && debounced.length >= 2
+        ? { k: { query: api.search.keyword, args: { q: debounced } } }
+        : NO_QUERIES,
+    [isAuthenticated, mode, debounced],
   );
+  const keywordMap = useQueries(keywordQueries);
   const keywordRaw = keywordMap.k;
   const keywordHits = Array.isArray(keywordRaw) ? keywordRaw : undefined;
 
