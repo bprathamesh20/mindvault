@@ -1,8 +1,8 @@
 import { v } from "convex/values";
-import { action, type ActionCtx } from "./_generated/server";
+import { action, query, type ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { cardValidator } from "./items";
+import { cardValidator, hydrateCard } from "./items";
 import { itemTypeValidator, ItemType } from "./shared";
 
 type Card = {
@@ -19,6 +19,8 @@ type Card = {
   savedAt: number;
   thumbnailUrl?: string;
   embedJson?: unknown;
+  thumbWidth?: number;
+  thumbHeight?: number;
 };
 
 async function requireUserIdentity(ctx: {
@@ -29,45 +31,44 @@ async function requireUserIdentity(ctx: {
   return identity;
 }
 
+async function embedQuery(q: string): Promise<number[] | undefined> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return undefined;
+  try {
+    const embRes = await fetch("https://openrouter.ai/api/v1/embeddings", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.EMBEDDING_MODEL ?? "openai/text-embedding-3-small",
+        input: q,
+      }),
+    });
+    if (!embRes.ok) return undefined;
+    const embJson = (await embRes.json()) as {
+      data?: Array<{ embedding?: number[] }>;
+    };
+    return embJson.data?.[0]?.embedding;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function hybridSearch(
   ctx: ActionCtx,
   q: string,
   type?: ItemType,
 ): Promise<Card[]> {
-  let embedding: number[] | undefined;
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (apiKey) {
-    try {
-      const embRes = await fetch("https://openrouter.ai/api/v1/embeddings", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: process.env.EMBEDDING_MODEL ?? "openai/text-embedding-3-small",
-          input: q,
-        }),
-      });
-      if (embRes.ok) {
-        const embJson = (await embRes.json()) as {
-          data?: Array<{ embedding?: number[] }>;
-        };
-        embedding = embJson.data?.[0]?.embedding;
-      }
-    } catch {
-      // fall back to FTS-only
-    }
-  }
-
-  const ftsPage: { page: Id<"items">[] } = await ctx.runQuery(
-    internal.searchDb.fts,
-    {
+  const [embedding, ftsPage] = await Promise.all([
+    embedQuery(q),
+    ctx.runQuery(internal.searchDb.fts, {
       q,
       type,
       paginationOpts: { numItems: 30, cursor: null },
-    },
-  );
+    }) as Promise<{ page: Id<"items">[] }>,
+  ]);
 
   let vecIds: Id<"items">[] = [];
   if (embedding && embedding.length === 1536) {
@@ -113,6 +114,25 @@ export async function hybridSearch(
     .map((id) => byId.get(id))
     .filter((d): d is Card => Boolean(d));
 }
+
+export const keyword = query({
+  args: { q: v.string(), type: v.optional(itemTypeValidator) },
+  returns: v.array(cardValidator),
+  handler: async (ctx, args) => {
+    await requireUserIdentity(ctx);
+    const q = args.q.trim();
+    if (q.length < 2) return [];
+    const result = await ctx.db
+      .query("items")
+      .withSearchIndex("search_text", (s) => {
+        let search = s.search("searchText", q);
+        if (args.type) search = search.eq("type", args.type);
+        return search;
+      })
+      .take(24);
+    return await Promise.all(result.map((doc) => hydrateCard(ctx, doc)));
+  },
+});
 
 export const search = action({
   args: { q: v.string(), type: v.optional(itemTypeValidator) },

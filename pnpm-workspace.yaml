@@ -21,3 +21,4 @@ minimumReleaseAgeExclude:
   - expo-modules-jsi@57.0.5
   - expo-router@57.0.15
   - expo@57.0.15
+  - '@rolldown/binding-openharmony-arm64@1.2.8'

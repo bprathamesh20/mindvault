@@ -30,9 +30,9 @@ export function SearchBar({
   const placeholder = mode === "ask" ? "Ask my vault…" : "Search my mind…";
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (mode === "ask" && e.key === "Enter") {
+    if (e.key === "Enter") {
       e.preventDefault();
-      onSubmitAsk();
+      if (mode === "ask") onSubmitAsk();
     }
     if (e.key === "Escape") {
       onChange("");

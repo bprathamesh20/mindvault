@@ -20,6 +20,8 @@ export type Card = {
   savedAt: number;
   thumbnailUrl?: string;
   embedJson?: unknown;
+  thumbWidth?: number;
+  thumbHeight?: number;
 };
 
 export type ItemType = Card["type"];

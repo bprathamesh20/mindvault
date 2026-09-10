@@ -14,6 +14,7 @@ import type * as ask from "../ask.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
+import type * as imageSize from "../imageSize.js";
 import type * as items from "../items.js";
 import type * as pipeline from "../pipeline.js";
 import type * as pipelineDb from "../pipelineDb.js";
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   crons: typeof crons;
   http: typeof http;
+  imageSize: typeof imageSize;
   items: typeof items;
   pipeline: typeof pipeline;
   pipelineDb: typeof pipelineDb;

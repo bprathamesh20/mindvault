@@ -88,19 +88,95 @@ export const persistMeta = internalMutation({
     contentText: v.optional(v.string()),
     htmlStorageId: v.optional(v.id("_storage")),
     thumbnailStorageId: v.optional(v.id("_storage")),
+    thumbWidth: v.optional(v.number()),
+    thumbHeight: v.optional(v.number()),
     embedJson: v.optional(v.any()),
     sourceDomain: v.optional(v.string()),
+    skipAi: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const item = await ctx.db.get(args.itemId);
     if (!item) return null;
-    const { itemId: _itemId, ...patch } = args;
+    const { itemId: _itemId, skipAi, ...patch } = args;
     await ctx.db.patch(args.itemId, { ...patch, status: "ready" });
+    if (!skipAi) {
+      await ctx.scheduler.runAfter(0, internal.ai.enrichAi, {
+        itemId: args.itemId,
+      });
+    }
+    return null;
+  },
+});
+
+export const patchContent = internalMutation({
+  args: {
+    itemId: v.id("items"),
+    contentText: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const item = await ctx.db.get(args.itemId);
+    if (!item) return null;
+    await ctx.db.patch(args.itemId, { contentText: args.contentText });
+    return null;
+  },
+});
+
+export const kickAi = internalMutation({
+  args: { itemId: v.id("items") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const item = await ctx.db.get(args.itemId);
+    if (!item) return null;
     await ctx.scheduler.runAfter(0, internal.ai.enrichAi, {
       itemId: args.itemId,
     });
     return null;
+  },
+});
+
+export const replaceThumb = internalMutation({
+  args: {
+    itemId: v.id("items"),
+    thumbnailStorageId: v.id("_storage"),
+    thumbWidth: v.number(),
+    thumbHeight: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const item = await ctx.db.get(args.itemId);
+    if (!item) return null;
+    await ctx.db.patch(args.itemId, {
+      thumbnailStorageId: args.thumbnailStorageId,
+      thumbWidth: args.thumbWidth,
+      thumbHeight: args.thumbHeight,
+    });
+    return null;
+  },
+});
+
+export const thumbsNeedingResize = internalQuery({
+  args: {},
+  returns: v.array(
+    v.object({
+      itemId: v.id("items"),
+      thumbnailStorageId: v.id("_storage"),
+    }),
+  ),
+  handler: async (ctx) => {
+    const docs = await ctx.db.query("items").withIndex("by_savedAt").take(80);
+    return docs
+      .filter(
+        (doc) =>
+          doc.thumbnailStorageId !== undefined &&
+          (doc.thumbWidth === undefined || doc.thumbHeight === undefined),
+      )
+      .slice(0, 20)
+      .map((doc) => ({
+        itemId: doc._id,
+        thumbnailStorageId: doc.thumbnailStorageId!,
+      }));
   },
 });
 

@@ -25,6 +25,8 @@ export default defineSchema({
     htmlStorageId: v.optional(v.id("_storage")),
     fileStorageId: v.optional(v.id("_storage")),
     thumbnailStorageId: v.optional(v.id("_storage")),
+    thumbWidth: v.optional(v.number()),
+    thumbHeight: v.optional(v.number()),
     embedJson: v.optional(v.any()),
     summary: v.optional(v.string()),
     searchText: v.optional(v.string()),

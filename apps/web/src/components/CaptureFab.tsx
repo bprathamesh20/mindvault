@@ -41,9 +41,12 @@ export function CaptureFab({
   async function save() {
     const v = draft.trim();
     if (!v || busy) return;
+    const isUrl = URL_RE.test(v);
+    setDraft("");
+    setOpen(false);
     setBusy(true);
     try {
-      if (URL_RE.test(v)) {
+      if (isUrl) {
         const res = await captureUrl({ url: v });
         flash(
           res.outcome === "duplicate"
@@ -56,8 +59,6 @@ export function CaptureFab({
         await captureNote({ text: v });
         flash("Note saved");
       }
-      setDraft("");
-      setOpen(false);
     } catch (err) {
       flash(err instanceof Error ? err.message : "Could not save that");
     } finally {
@@ -116,7 +117,7 @@ export function CaptureFab({
 
       {open ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
           onClick={() => setOpen(false)}
         >
           <div

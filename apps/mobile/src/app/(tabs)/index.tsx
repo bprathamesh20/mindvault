@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
@@ -22,6 +22,7 @@ import { useShareIntentContext } from "expo-share-intent";
 import { api } from "../../lib/backend";
 import type { Card } from "../../lib/types";
 import { ItemCard } from "../../components/item-card";
+import { setCardSeed } from "../../lib/card-seed";
 import { SignIn } from "../../components/sign-in";
 import { Toast } from "../../components/toast";
 import { colors, fonts, radius } from "../../lib/theme";
@@ -90,7 +91,7 @@ function HomeScreen() {
         }
         flash(message);
         if (fromShare) {
-          setTimeout(() => BackHandler.exitApp(), 900);
+          setTimeout(() => BackHandler.exitApp(), 250);
         }
       } catch (err) {
         flash(err instanceof Error ? err.message : "Could not save that");
@@ -124,14 +125,33 @@ function HomeScreen() {
     const ready = (results as Card[]).filter((r) => r.status === "ready");
     if (ready.length === 0) return;
     const pick = ready[Math.floor(Math.random() * ready.length)];
+    setCardSeed(pick);
     router.push({ pathname: "/item/[id]", params: { id: pick.id } });
   }
 
   const openItem = useCallback(
-    (id: string) => {
-      router.push({ pathname: "/item/[id]", params: { id } });
+    (item: Card) => {
+      setCardSeed(item);
+      router.push({ pathname: "/item/[id]", params: { id: item.id } });
     },
     [router],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: Card }) => (
+      <View style={styles.cell}>
+        <ItemCard item={item} onPress={openItem} />
+      </View>
+    ),
+    [openItem],
+  );
+
+  const listPadding = useMemo(
+    () => ({
+      paddingHorizontal: 10,
+      paddingBottom: tabBarHeight + 72,
+    }),
+    [tabBarHeight],
   );
 
   return (
@@ -155,29 +175,23 @@ function HomeScreen() {
         <Text style={styles.searchPlaceholder}>Search your mind…</Text>
       </Pressable>
 
-      {isLoading ? (
-        <Center>
-          <ActivityIndicator color={colors.textFaint} />
-        </Center>
-      ) : (
-        <FlashList
-          masonry
-          numColumns={2}
-          data={(results ?? []) as Card[]}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={styles.cell}>
-              <ItemCard item={item} onPress={openItem} />
-            </View>
-          )}
-          contentContainerStyle={{
-            paddingHorizontal: 10,
-            paddingBottom: tabBarHeight + 72,
-          }}
-          onEndReached={() => {
-            if (status === "CanLoadMore") loadMore(20);
-          }}
-          ListEmptyComponent={
+      <FlashList
+        masonry
+        numColumns={2}
+        data={(results ?? []) as Card[]}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={listPadding}
+        onEndReached={() => {
+          if (status === "CanLoadMore") loadMore(20);
+        }}
+        onEndReachedThreshold={0.4}
+        ListEmptyComponent={
+          isLoading ? (
+            <Center style={styles.emptyWrap}>
+              <ActivityIndicator color={colors.textFaint} />
+            </Center>
+          ) : (
             <Center style={styles.emptyWrap}>
               <Ionicons name="sparkles-outline" size={34} color={colors.borderStrong} />
               <Text style={styles.emptyTitle}>Your mind is empty.</Text>
@@ -185,9 +199,9 @@ function HomeScreen() {
                 Tap ＋ to save a link,{"\n"}or share one from any app.
               </Text>
             </Center>
-          }
-        />
-      )}
+          )
+        }
+      />
 
       <Toast message={toast} />
 

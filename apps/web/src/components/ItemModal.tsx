@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { optimisticPatchItem, optimisticRemoveItem } from "../lib/optimistic";
 import { DocumentPreview } from "./DocumentPreview";
+import type { Card } from "./types";
 
 function timeAgo(savedAt: number): string {
   const s = Math.floor((Date.now() - savedAt) / 1000);
@@ -34,21 +36,69 @@ type Detail = {
   embedJson?: unknown;
   userNote?: string;
   isDone?: boolean;
+  tags?: string[];
   savedAt: number;
 };
 
+function previewAsDetail(card: Card): Detail {
+  return {
+    id: card.id,
+    type: card.type,
+    url: card.url,
+    title: card.title,
+    author: card.author,
+    sourceDomain: card.sourceDomain,
+    contentText: card.preview,
+    summary: card.summary,
+    thumbnailUrl: card.thumbnailUrl,
+    embedJson: card.embedJson,
+    tags: card.tags,
+    savedAt: card.savedAt,
+  };
+}
+
 export function ItemModal({
   itemId,
+  preview,
   onClose,
 }: {
   itemId: string;
+  preview?: Card;
   onClose: () => void;
 }) {
   const item = useQuery(api.items.get, { id: itemId as Id<"items"> });
-  const update = useMutation(api.items.update);
-  const addTag = useMutation(api.items.addTag);
-  const removeTag = useMutation(api.items.removeTag);
-  const removeItem = useMutation(api.items.removeItem);
+  const update = useMutation(api.items.update).withOptimisticUpdate(
+    (localStore, args) =>
+      optimisticPatchItem(localStore, args.id, {
+        title: args.title,
+        userNote: args.userNote,
+        isDone: args.isDone,
+      }),
+  );
+  const addTag = useMutation(api.items.addTag).withOptimisticUpdate(
+    (localStore, args) => {
+      const current = localStore.getQuery(api.items.get, { id: args.id });
+      const name = args.name.trim().toLowerCase().slice(0, 30);
+      if (current && name.length >= 2 && !current.tags.includes(name)) {
+        optimisticPatchItem(localStore, args.id, {
+          tags: [...current.tags, name],
+        });
+      }
+    },
+  );
+  const removeTag = useMutation(api.items.removeTag).withOptimisticUpdate(
+    (localStore, args) => {
+      const current = localStore.getQuery(api.items.get, { id: args.id });
+      if (current) {
+        optimisticPatchItem(localStore, args.id, {
+          tags: current.tags.filter((t) => t !== args.name.trim().toLowerCase()),
+        });
+      }
+    },
+  );
+  const removeItem = useMutation(api.items.removeItem).withOptimisticUpdate(
+    (localStore, args) => optimisticRemoveItem(localStore, args.id),
+  );
 
   const [loaded, setLoaded] = useState<{ url: string; text: string } | null>(
     null,
@@ -57,6 +107,7 @@ export function ItemModal({
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const [tagging, setTagging] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
+  const [playEmbed, setPlayEmbed] = useState(false);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -88,16 +139,18 @@ export function ItemModal({
     [update, itemId],
   );
 
-  if (item === undefined) {
+  const it: Detail | undefined =
+    item ??
+    (preview && preview.id === itemId ? previewAsDetail(preview) : undefined);
+
+  if (it === undefined) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
         <p className="font-serif italic text-stone-400">Loading…</p>
       </div>
     );
   }
   if (item === null) return null;
-
-  const it = item as Detail;
   const embed =
     typeof it.embedJson === "object" && it.embedJson !== null
       ? (it.embedJson as Record<string, unknown>)
@@ -116,7 +169,7 @@ export function ItemModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:p-8"
+      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4 sm:p-8"
       onClick={onClose}
     >
       <div
@@ -138,25 +191,74 @@ export function ItemModal({
           }`}
         >
           {isYouTube && typeof embed.videoId === "string" ? (
-            <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
-              <iframe
-                src={`https://www.youtube.com/embed/${embed.videoId}`}
-                title={it.title ?? "YouTube video"}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="h-full w-full"
-              />
-            </div>
+            playEmbed ? (
+              <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
+                <iframe
+                  src={`https://www.youtube.com/embed/${embed.videoId}?autoplay=1`}
+                  title={it.title ?? "YouTube video"}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="h-full w-full"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPlayEmbed(true)}
+                className="relative aspect-video w-full overflow-hidden rounded-xl bg-black"
+              >
+                {typeof embed.videoId === "string" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`https://i.ytimg.com/vi/${embed.videoId}/maxresdefault.jpg`}
+                    alt={it.title ?? ""}
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = `https://i.ytimg.com/vi/${embed.videoId}/mqdefault.jpg`;
+                    }}
+                  />
+                ) : it.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={it.thumbnailUrl}
+                    alt={it.title ?? ""}
+                    className="h-full w-full object-cover"
+                  />
+                ) : null}
+                <span className="absolute inset-0 grid place-items-center bg-black/30 text-5xl text-white">
+                  ▶
+                </span>
+              </button>
+            )
           ) : isInstagram && typeof embed.shortcode === "string" ? (
-            <div className="flex w-full max-w-[420px] justify-center">
-              <iframe
-                src={`https://www.instagram.com/${embed.kind === "reel" ? "reel" : "p"}/${embed.shortcode}/embed`}
-                title={it.title ?? "Instagram post"}
-                className="max-h-[70vh] min-h-[420px] w-full rounded-xl bg-white"
-                frameBorder={0}
-                scrolling="no"
-              />
-            </div>
+            playEmbed ? (
+              <div className="flex w-full max-w-[420px] justify-center">
+                <iframe
+                  src={`https://www.instagram.com/${embed.kind === "reel" ? "reel" : "p"}/${embed.shortcode}/embed`}
+                  title={it.title ?? "Instagram post"}
+                  className="max-h-[70vh] min-h-[420px] w-full rounded-xl bg-white"
+                  frameBorder={0}
+                  scrolling="no"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPlayEmbed(true)}
+                className="relative w-full max-w-[420px] overflow-hidden rounded-xl bg-black"
+              >
+                {it.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={it.thumbnailUrl}
+                    alt={it.title ?? ""}
+                    className="w-full object-cover"
+                  />
+                ) : (
+                  <span className="block py-24 text-white">Open Instagram</span>
+                )}
+              </button>
+            )
           ) : it.thumbnailUrl && it.type !== "note" ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -245,7 +347,7 @@ export function ItemModal({
               MIND TAGS
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              {(item as Detail & { tags?: string[] }).tags?.map((t) => (
+              {(it.tags ?? []).map((t) => (
                 <span
                   key={t}
                   className="group/tag inline-flex items-center gap-1.5 rounded-full border border-stone-200 px-3 py-1 text-xs text-stone-500 dark:border-[#2a2a31] dark:text-[#9b9ba4]"

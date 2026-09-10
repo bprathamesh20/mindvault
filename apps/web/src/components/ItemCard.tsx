@@ -3,6 +3,7 @@
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { optimisticRemoveItem } from "../lib/optimistic";
 import type { Card } from "./types";
 import { DocumentPreview } from "./DocumentPreview";
 
@@ -11,9 +12,11 @@ export function ItemCard({
   onOpen,
 }: {
   item: Card;
-  onOpen?: (id: string) => void;
+  onOpen?: (item: Card) => void;
 }) {
-  const removeItem = useMutation(api.items.removeItem);
+  const removeItem = useMutation(api.items.removeItem).withOptimisticUpdate(
+    (localStore, args) => optimisticRemoveItem(localStore, args.id),
+  );
 
   if (item.status === "pending") {
     return (
@@ -47,11 +50,12 @@ export function ItemCard({
   const isSocial = item.type === "tweet" || item.type === "instagram";
   const quote =
     isTweetCard(item) ? item.embedJson?.quote : undefined;
+  const thumbSize = saneThumb(item.thumbWidth, item.thumbHeight);
 
   return (
     <div
-      onClick={() => onOpen?.(item.id)}
-      className={`surface group mb-5 break-inside-avoid overflow-hidden rounded-xl border shadow-sm transition-all duration-200 hover:shadow-lg hover:brightness-[1.02] dark:shadow-none ${
+      onClick={() => onOpen?.(item)}
+      className={`surface group relative mb-5 break-inside-avoid overflow-hidden rounded-xl border shadow-sm transition duration-200 hover:shadow-lg hover:brightness-[1.02] dark:shadow-none ${
         item.type === "note"
           ? "border-amber-200/70 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20"
           : ""
@@ -67,7 +71,16 @@ export function ItemCard({
         <img
           src={item.thumbnailUrl}
           alt={item.title ?? ""}
+          width={thumbSize?.w}
+          height={thumbSize?.h}
+          loading="lazy"
+          decoding="async"
           className="mt-3 max-h-[420px] w-full object-cover brightness-[0.98] first:mt-0 dark:brightness-[0.85]"
+          style={
+            thumbSize
+              ? { aspectRatio: `${thumbSize.w} / ${thumbSize.h}` }
+              : undefined
+          }
         />
       ) : null}
       <div className={item.thumbnailUrl ? "p-4 pt-3" : "p-4"}>
@@ -114,9 +127,9 @@ export function ItemCard({
             {item.summary}
           </p>
         ) : null}
-        {item.tags.length > 0 ? (
+        {(item.tags ?? []).length > 0 ? (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {item.tags.slice(0, 3).map((tag) => (
+            {(item.tags ?? []).slice(0, 3).map((tag) => (
               <span
                 key={tag}
                 className="rounded-full border border-stone-200 px-2 py-0.5 text-[11px] text-stone-500 dark:border-[#2a2a31] dark:text-[#8b8b94]"
@@ -130,18 +143,37 @@ export function ItemCard({
           {[item.sourceDomain, timeAgo(item.savedAt)].filter(Boolean).join(" · ")}
         </p>
       </div>
-      <button
-        aria-label="Delete"
-        onClick={(e) => {
-          e.stopPropagation();
-          void removeItem({ id: item.id as Id<"items"> });
-        }}
-        className="absolute right-2 top-2 rounded-full opacity-0 transition hover:text-red-400 [div.group:hover>&]:opacity-100"
-      >
-        ✕
-      </button>
+      {onOpen ? (
+        <button
+          aria-label="Delete"
+          onClick={(e) => {
+            e.stopPropagation();
+            void removeItem({ id: item.id as Id<"items"> });
+          }}
+          className="absolute right-2 top-2 rounded-full opacity-0 transition hover:text-red-400 [div.group:hover>&]:opacity-100"
+        >
+          ✕
+        </button>
+      ) : null}
     </div>
   );
+}
+
+function saneThumb(
+  width?: number,
+  height?: number,
+): { w: number; h: number } | undefined {
+  if (
+    !width ||
+    !height ||
+    width < 1 ||
+    height < 1 ||
+    width > 8192 ||
+    height > 8192
+  ) {
+    return undefined;
+  }
+  return { w: width, h: height };
 }
 
 function isTweetCard(
