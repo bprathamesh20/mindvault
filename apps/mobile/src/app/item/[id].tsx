@@ -14,6 +14,8 @@ import {
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
+import { peekCardSeed } from "../../lib/card-seed";
+import { optimisticPatchItem, optimisticRemoveItem } from "../../lib/optimistic";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useConvexAuth } from "@convex-dev/auth/react";
@@ -41,25 +43,45 @@ export default function ItemPage() {
 
 function ItemScreen({ itemId }: { itemId: string }) {
   const item = useQuery(api.items.get, { id: itemId as Id<"items"> });
-  const update = useMutation(api.items.update);
-  const addTag = useMutation(api.items.addTag);
-  const removeTag = useMutation(api.items.removeTag);
-  const removeItem = useMutation(api.items.removeItem);
+  const seed = peekCardSeed(itemId);
+  const update = useMutation(api.items.update).withOptimisticUpdate(
+    (localStore, args) =>
+      optimisticPatchItem(localStore, args.id, {
+        title: args.title,
+        userNote: args.userNote,
+        isDone: args.isDone,
+      }),
+  );
+  const addTag = useMutation(api.items.addTag).withOptimisticUpdate(
+    (localStore, args) => {
+      const current = localStore.getQuery(api.items.get, { id: args.id });
+      const name = args.name.trim().toLowerCase().slice(0, 30);
+      if (current && name.length >= 2 && !current.tags.includes(name)) {
+        optimisticPatchItem(localStore, args.id, {
+          tags: [...current.tags, name],
+        });
+      }
+    },
+  );
+  const removeTag = useMutation(api.items.removeTag).withOptimisticUpdate(
+    (localStore, args) => {
+      const current = localStore.getQuery(api.items.get, { id: args.id });
+      if (current) {
+        optimisticPatchItem(localStore, args.id, {
+          tags: current.tags.filter((t) => t !== args.name.trim().toLowerCase()),
+        });
+      }
+    },
+  );
+  const removeItem = useMutation(api.items.removeItem).withOptimisticUpdate(
+    (localStore, args) => optimisticRemoveItem(localStore, args.id),
+  );
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const [addingTag, setAddingTag] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
 
-  if (item === undefined)
-    return (
-      <SafeAreaView style={styles.container}>
-        <Header canShare={false} url={undefined} title={undefined} />
-        <Center>
-          <ActivityIndicator color={colors.textFaint} />
-        </Center>
-      </SafeAreaView>
-    );
   if (item === null)
     return (
       <SafeAreaView style={styles.container}>
@@ -70,7 +92,33 @@ function ItemScreen({ itemId }: { itemId: string }) {
       </SafeAreaView>
     );
 
-  const it = item as Detail & { tags?: string[] };
+  const it = (item ??
+    (seed
+      ? {
+          id: seed.id,
+          type: seed.type,
+          url: seed.url,
+          title: seed.title,
+          author: seed.author,
+          sourceDomain: seed.sourceDomain,
+          contentText: seed.preview,
+          summary: seed.summary,
+          thumbnailUrl: seed.thumbnailUrl,
+          embedJson: seed.embedJson,
+          tags: seed.tags,
+          savedAt: seed.savedAt,
+        }
+      : undefined)) as (Detail & { tags?: string[] }) | undefined;
+
+  if (!it)
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header canShare={false} url={undefined} title={undefined} />
+        <Center>
+          <ActivityIndicator color={colors.textFaint} />
+        </Center>
+      </SafeAreaView>
+    );
   const embed =
     typeof it.embedJson === "object" && it.embedJson !== null
       ? (it.embedJson as Record<string, unknown>)
@@ -98,8 +146,10 @@ function ItemScreen({ itemId }: { itemId: string }) {
     }
   }
 
+  const currentNote = it.userNote ?? "";
+
   function saveNote() {
-    if (noteDraft !== null && noteDraft !== (it.userNote ?? "")) {
+    if (noteDraft !== null && noteDraft !== currentNote) {
       void update({
         id: itemId as Id<"items">,
         userNote: noteDraft,

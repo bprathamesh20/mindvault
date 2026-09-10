@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, type QueryCtx } from "./_generated/server";
 import {
   paginationOptsValidator,
   paginationResultValidator,
@@ -31,9 +31,49 @@ const cardValidator = v.object({
   savedAt: v.number(),
   thumbnailUrl: v.optional(v.string()),
   embedJson: v.optional(v.any()),
+  thumbWidth: v.optional(v.number()),
+  thumbHeight: v.optional(v.number()),
 });
 
 export { cardValidator };
+
+export async function hydrateCard(ctx: QueryCtx, doc: Doc<"items">) {
+  const [thumbnailUrl, tagLinks] = await Promise.all([
+    doc.thumbnailStorageId
+      ? ctx.storage.getUrl(doc.thumbnailStorageId)
+      : Promise.resolve(null),
+    ctx.db
+      .query("itemTags")
+      .withIndex("by_item", (q) => q.eq("itemId", doc._id))
+      .take(6),
+  ]);
+  const tagDocs = await Promise.all(
+    tagLinks.map((link) => ctx.db.get(link.tagId)),
+  );
+  const tags = tagDocs
+    .filter((t): t is NonNullable<typeof t> => t !== null)
+    .map((t) => t.name);
+  return {
+    id: doc._id,
+    type: doc.type,
+    url: doc.url,
+    title: doc.title,
+    author: doc.author,
+    sourceDomain: doc.sourceDomain,
+    preview:
+      doc.type === "document"
+        ? doc.contentText?.slice(0, 800)
+        : doc.contentText?.slice(0, 400),
+    summary: doc.summary,
+    tags,
+    status: doc.status,
+    savedAt: doc.savedAt,
+    thumbnailUrl: thumbnailUrl ?? undefined,
+    embedJson: doc.embedJson,
+    thumbWidth: doc.thumbWidth,
+    thumbHeight: doc.thumbHeight,
+  };
+}
 
 type IdentityLike = { tokenIdentifier: string } | null;
 
@@ -55,40 +95,6 @@ export const list = query({
   handler: async (ctx, args) => {
     await requireUserIdentity(ctx);
 
-    const toCard = async (doc: Doc<"items">) => {
-      const thumbnailUrl = doc.thumbnailStorageId
-        ? await ctx.storage.getUrl(doc.thumbnailStorageId)
-        : undefined;
-      const tagLinks = await ctx.db
-        .query("itemTags")
-        .withIndex("by_item", (q) => q.eq("itemId", doc._id))
-        .take(6);
-      const tags: string[] = [];
-      for (const link of tagLinks) {
-        const tag = await ctx.db.get(link.tagId);
-        if (tag) tags.push(tag.name);
-      }
-      return {
-        id: doc._id,
-        type: doc.type,
-        url: doc.url,
-        title: doc.title,
-        author: doc.author,
-        sourceDomain: doc.sourceDomain,
-        preview:
-          doc.type === "document"
-            ? doc.contentText?.slice(0, 800)
-            : doc.contentText?.slice(0, 400),
-        summary: doc.summary,
-        tags,
-        status: doc.status,
-        savedAt: doc.savedAt,
-        thumbnailUrl: thumbnailUrl ?? undefined,
-        embedJson: doc.embedJson,
-      };
-    };
-
-    // Tag-filtered space view: paginate itemTags, hydrate items
     if (args.tag) {
       const tag = await ctx.db
         .query("tags")
@@ -102,15 +108,16 @@ export const list = query({
         .withIndex("by_tag", (q) => q.eq("tagId", tag._id))
         .order("desc")
         .paginate(args.paginationOpts);
-      const page = [];
-      for (const link of links.page) {
-        const doc = await ctx.db.get(link.itemId);
-        if (!doc) continue;
-        if (args.type && doc.type !== args.type) continue;
-        page.push(await toCard(doc));
-      }
+      const docs = await Promise.all(
+        links.page.map((link) => ctx.db.get(link.itemId)),
+      );
+      const filtered = docs.filter((doc): doc is Doc<"items"> => {
+        if (!doc) return false;
+        if (args.type && doc.type !== args.type) return false;
+        return true;
+      });
       return {
-        page,
+        page: await Promise.all(filtered.map((doc) => hydrateCard(ctx, doc))),
         isDone: links.isDone,
         continueCursor: links.continueCursor,
       };
@@ -123,12 +130,10 @@ export const list = query({
       : ctx.db.query("items").withIndex("by_savedAt");
 
     const result = await baseQuery.order("desc").paginate(args.paginationOpts);
-    const page = [];
-    for (const doc of result.page) {
-      page.push(await toCard(doc));
-    }
     return {
-      page,
+      page: await Promise.all(
+        result.page.map((doc) => hydrateCard(ctx, doc)),
+      ),
       isDone: result.isDone,
       continueCursor: result.continueCursor,
     };
@@ -239,24 +244,27 @@ export const get = query({
     await requireUserIdentity(ctx);
     const doc = await ctx.db.get(args.id);
     if (!doc) return null;
-    const htmlUrl = doc.htmlStorageId
-      ? await ctx.storage.getUrl(doc.htmlStorageId)
-      : undefined;
-    const fileUrl = doc.fileStorageId
-      ? await ctx.storage.getUrl(doc.fileStorageId)
-      : undefined;
-    const thumbnailUrl = doc.thumbnailStorageId
-      ? await ctx.storage.getUrl(doc.thumbnailStorageId)
-      : undefined;
-    const tagLinks = await ctx.db
-      .query("itemTags")
-      .withIndex("by_item", (q) => q.eq("itemId", doc._id))
-      .take(30);
-    const tags: string[] = [];
-    for (const link of tagLinks) {
-      const tag = await ctx.db.get(link.tagId);
-      if (tag) tags.push(tag.name);
-    }
+    const [htmlUrl, fileUrl, thumbnailUrl, tagLinks] = await Promise.all([
+      doc.htmlStorageId
+        ? ctx.storage.getUrl(doc.htmlStorageId)
+        : Promise.resolve(null),
+      doc.fileStorageId
+        ? ctx.storage.getUrl(doc.fileStorageId)
+        : Promise.resolve(null),
+      doc.thumbnailStorageId
+        ? ctx.storage.getUrl(doc.thumbnailStorageId)
+        : Promise.resolve(null),
+      ctx.db
+        .query("itemTags")
+        .withIndex("by_item", (q) => q.eq("itemId", doc._id))
+        .take(30),
+    ]);
+    const tagDocs = await Promise.all(
+      tagLinks.map((link) => ctx.db.get(link.tagId)),
+    );
+    const tags = tagDocs
+      .filter((t): t is NonNullable<typeof t> => t !== null)
+      .map((t) => t.name);
     return {
       id: doc._id,
       type: doc.type,
@@ -287,7 +295,7 @@ export const serendipity = query({
     const pool = await ctx.db
       .query("items")
       .withIndex("by_status_and_savedAt", (q) => q.eq("status", "ready"))
-      .take(200);
+      .take(40);
     if (pool.length === 0) return null;
     const pick = pool[Math.floor(Math.random() * pool.length)];
     return pick._id;
@@ -425,9 +433,20 @@ export const removeItem = mutation({
     await requireUserIdentity(ctx);
     const doc = await ctx.db.get(args.id);
     if (!doc) return null;
-    if (doc.thumbnailStorageId) await ctx.storage.delete(doc.thumbnailStorageId);
-    if (doc.htmlStorageId) await ctx.storage.delete(doc.htmlStorageId);
-    if (doc.fileStorageId) await ctx.storage.delete(doc.fileStorageId);
+    const links = await ctx.db
+      .query("itemTags")
+      .withIndex("by_item", (q) => q.eq("itemId", args.id))
+      .take(50);
+    await Promise.all([
+      ...links.map((link) => ctx.db.delete(link._id)),
+      doc.thumbnailStorageId
+        ? ctx.storage.delete(doc.thumbnailStorageId)
+        : Promise.resolve(),
+      doc.htmlStorageId
+        ? ctx.storage.delete(doc.htmlStorageId)
+        : Promise.resolve(),
+      doc.fileStorageId ? ctx.storage.delete(doc.fileStorageId) : Promise.resolve(),
+    ]);
     await ctx.db.delete(args.id);
     return null;
   },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { Ionicons } from "@expo/vector-icons";
-import { useAction } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -17,6 +17,7 @@ import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "../../lib/backend";
 import type { Card } from "../../lib/types";
 import { ItemCard } from "../../components/item-card";
+import { setCardSeed } from "../../lib/card-seed";
 import { SignIn } from "../../components/sign-in";
 import { colors, fonts, radius } from "../../lib/theme";
 import { CONVEX_URL } from "../../lib/convex-url";
@@ -45,42 +46,78 @@ function SearchScreenBody() {
   const tabBarHeight = useBottomTabBarHeight();
   const searchAction = useAction(api.search.search);
   const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
   const [results, setResults] = useState<Card[]>([]);
   const [busy, setBusy] = useState(false);
   const [touched, setTouched] = useState(false);
 
   useEffect(() => {
-    const q = query.trim();
-    if (!q) {
+    const t = setTimeout(() => setDebounced(query.trim()), 200);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const keywordHits = useQuery(
+    api.search.keyword,
+    debounced.length >= 2 ? { q: debounced } : "skip",
+  );
+
+  useEffect(() => {
+    if (debounced.length < 2) {
       setResults([]);
+      setBusy(false);
       return;
     }
     let cancelled = false;
     setBusy(true);
-    const t = setTimeout(async () => {
-      try {
-        const r = await searchAction({ q });
+    void searchAction({ q: debounced })
+      .then((r) => {
         if (!cancelled) setResults(r as Card[]);
-      } catch {
+      })
+      .catch(() => {
         if (!cancelled) setResults([]);
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setBusy(false);
-      }
-    }, 400);
+      });
     return () => {
       cancelled = true;
-      clearTimeout(t);
     };
-  }, [query, searchAction]);
+  }, [debounced, searchAction]);
+
+  const shown =
+    results.length > 0 ? results : ((keywordHits ?? []) as Card[]);
 
   const openItem = useCallback(
-    (id: string) => {
-      router.push({ pathname: "/item/[id]", params: { id } });
+    (item: Card) => {
+      setCardSeed(item);
+      router.push({ pathname: "/item/[id]", params: { id: item.id } });
     },
     [router],
   );
 
-  const showEmpty = touched && query.trim().length > 0 && !busy && results.length === 0;
+  const renderItem = useCallback(
+    ({ item }: { item: Card }) => (
+      <View style={styles.cell}>
+        <ItemCard item={item} onPress={openItem} />
+      </View>
+    ),
+    [openItem],
+  );
+
+  const listPadding = useMemo(
+    () => ({
+      paddingHorizontal: 10,
+      paddingBottom: tabBarHeight + 24,
+    }),
+    [tabBarHeight],
+  );
+
+  const showEmpty =
+    touched &&
+    debounced.length >= 2 &&
+    !busy &&
+    shown.length === 0 &&
+    keywordHits !== undefined;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -96,6 +133,7 @@ function SearchScreenBody() {
           placeholder="Search your mind…"
           placeholderTextColor={colors.textFaint}
           style={styles.input}
+          autoFocus
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
@@ -107,30 +145,23 @@ function SearchScreenBody() {
         ) : null}
       </View>
 
-      {busy && query.trim() ? (
+      {busy && shown.length === 0 && query.trim() ? (
         <View style={styles.busyRow}>
           <ActivityIndicator size="small" color={colors.textFaint} />
         </View>
-      ) : results.length > 0 ? (
+      ) : shown.length > 0 ? (
         <Text style={styles.count}>
-          {results.length} {results.length === 1 ? "memory" : "memories"} found
+          {shown.length} {shown.length === 1 ? "memory" : "memories"} found
         </Text>
       ) : null}
 
       <FlashList
         masonry
         numColumns={2}
-        data={results}
+        data={shown}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.cell}>
-            <ItemCard item={item} onPress={openItem} />
-          </View>
-        )}
-        contentContainerStyle={{
-          paddingHorizontal: 10,
-          paddingBottom: tabBarHeight + 24,
-        }}
+        renderItem={renderItem}
+        contentContainerStyle={listPadding}
         ListEmptyComponent={
           showEmpty ? (
             <Center style={styles.emptyWrap}>

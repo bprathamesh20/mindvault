@@ -13,6 +13,7 @@ import {
   toMarkdownBytes,
 } from "@firecrawl/anydoc";
 import type { Id } from "./_generated/dataModel";
+import { imageSize } from "./imageSize";
 import { DOCUMENT_MAX_BYTES, extensionOf } from "./shared";
 
 const UA =
@@ -209,27 +210,28 @@ async function extractYouTube(url: URL): Promise<Extracted> {
   }
   if (!title) throw new Error("YouTube metadata unavailable (private video?)");
 
-  // Transcript → the actual spoken content becomes searchable
-  let transcript: string | undefined;
+  return {
+    title,
+    author: author ? `${author} (YouTube)` : undefined,
+    text: title,
+    thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    embedJson: { provider: "youtube", videoId, kind },
+  };
+}
+
+async function fetchYouTubeTranscript(videoId: string): Promise<string | undefined> {
   try {
     const parts = await YoutubeTranscript.fetchTranscript(videoId);
     if (parts && parts.length > 0) {
-      transcript = parts
+      return parts
         .map((p) => p.text.replace(/\s+/g, " "))
         .join(" ")
         .slice(0, 50000);
     }
   } catch {
-    // captions disabled or blocked — video still saves with title/summary-less text
+    return undefined;
   }
-
-  return {
-    title,
-    author: author ? `${author} (YouTube)` : undefined,
-    text: transcript ?? title,
-    thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
-    embedJson: { provider: "youtube", videoId, kind },
-  };
+  return undefined;
 }
 
 async function extractArticle(url: URL): Promise<Extracted> {
@@ -332,6 +334,39 @@ async function extractUploadedDocument(args: {
   return { text, format: format ?? (ext || undefined) };
 }
 
+async function persistThumb(
+  ctx: { storage: { store: (blob: Blob) => Promise<Id<"_storage">> } },
+  url: string,
+): Promise<{
+  thumbnailStorageId: Id<"_storage">;
+  thumbWidth?: number;
+  thumbHeight?: number;
+} | undefined> {
+  try {
+    const imgRes = await fetch(url, {
+      headers: { "User-Agent": UA },
+      redirect: "follow",
+    });
+    if (!imgRes.ok) return undefined;
+    const bytes = await imgRes.arrayBuffer();
+    if (bytes.byteLength === 0 || bytes.byteLength >= 10 * 1024 * 1024) {
+      return undefined;
+    }
+    const size = imageSize(bytes);
+    const blob = new Blob([bytes], {
+      type: imgRes.headers.get("content-type") ?? "image/jpeg",
+    });
+    const thumbnailStorageId = await ctx.storage.store(blob);
+    return {
+      thumbnailStorageId,
+      thumbWidth: size?.width,
+      thumbHeight: size?.height,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 function filenameFromItem(item: {
   title?: string;
   embedJson?: unknown;
@@ -399,26 +434,9 @@ export const enrich = internalAction({
         extracted = await extractArticle(url);
       }
 
-      let thumbnailStorageId: Id<"_storage"> | undefined;
-      if (extracted.thumbnailUrl) {
-        try {
-          const imgRes = await fetch(extracted.thumbnailUrl, {
-            headers: { "User-Agent": UA },
-            redirect: "follow",
-          });
-          if (imgRes.ok) {
-            const bytes = await imgRes.arrayBuffer();
-            if (bytes.byteLength > 0 && bytes.byteLength < 10 * 1024 * 1024) {
-              const blob = new Blob([bytes], {
-                type: imgRes.headers.get("content-type") ?? "image/jpeg",
-              });
-              thumbnailStorageId = await ctx.storage.store(blob);
-            }
-          }
-        } catch {
-          // thumbnail is optional — never fail enrichment over it
-        }
-      }
+      const thumb = extracted.thumbnailUrl
+        ? await persistThumb(ctx, extracted.thumbnailUrl)
+        : undefined;
 
       let htmlStorageId: Id<"_storage"> | undefined;
       if (extracted.html && extracted.html.length > 20000) {
@@ -426,16 +444,39 @@ export const enrich = internalAction({
         htmlStorageId = await ctx.storage.store(blob);
       }
 
+      const isYouTube = host === "youtube.com" || host === "youtu.be";
       await ctx.runMutation(internal.pipelineDb.persistMeta, {
         itemId: args.itemId,
         title: extracted.title,
         author: extracted.author,
         contentText: extracted.text?.slice(0, 50000),
         htmlStorageId,
-        thumbnailStorageId,
+        thumbnailStorageId: thumb?.thumbnailStorageId,
+        thumbWidth: thumb?.thumbWidth,
+        thumbHeight: thumb?.thumbHeight,
         embedJson: extracted.embedJson,
         sourceDomain: host,
+        skipAi: isYouTube,
       });
+
+      if (isYouTube) {
+        const videoId =
+          extracted.embedJson && typeof extracted.embedJson.videoId === "string"
+            ? extracted.embedJson.videoId
+            : undefined;
+        if (videoId) {
+          const transcript = await fetchYouTubeTranscript(videoId);
+          if (transcript) {
+            await ctx.runMutation(internal.pipelineDb.patchContent, {
+              itemId: args.itemId,
+              contentText: transcript,
+            });
+          }
+        }
+        await ctx.runMutation(internal.pipelineDb.kickAi, {
+          itemId: args.itemId,
+        });
+      }
     } catch (error) {
       await ctx.runMutation(internal.pipelineDb.markFailed, {
         itemId: args.itemId,
@@ -443,6 +484,36 @@ export const enrich = internalAction({
       });
     }
     return null;
+  },
+});
+
+export const stampThumbSizes = internalAction({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const pending: Array<{
+      itemId: Id<"items">;
+      thumbnailStorageId: Id<"_storage">;
+    }> = await ctx.runQuery(internal.pipelineDb.thumbsNeedingResize, {});
+    let n = 0;
+    for (const row of pending) {
+      try {
+        const blob = await ctx.storage.get(row.thumbnailStorageId);
+        if (!blob) continue;
+        const size = imageSize(await blob.arrayBuffer());
+        if (!size) continue;
+        await ctx.runMutation(internal.pipelineDb.replaceThumb, {
+          itemId: row.itemId,
+          thumbnailStorageId: row.thumbnailStorageId,
+          thumbWidth: size.width,
+          thumbHeight: size.height,
+        });
+        n += 1;
+      } catch {
+        continue;
+      }
+    }
+    return n;
   },
 });
 

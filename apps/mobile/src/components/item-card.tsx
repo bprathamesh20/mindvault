@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -13,12 +14,12 @@ const THUMB_ASPECT: Partial<Record<Card["type"], number>> = {
   link: 16 / 9,
 };
 
-export function ItemCard({
+export const ItemCard = memo(function ItemCard({
   item,
   onPress,
 }: {
   item: Card;
-  onPress?: (id: string) => void;
+  onPress?: (item: Card) => void;
 }) {
   if (item.status === "pending") {
     return (
@@ -35,7 +36,7 @@ export function ItemCard({
     return (
       <Pressable
         style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-        onPress={() => onPress?.(item.id)}
+        onPress={() => onPress?.(item)}
         android_ripple={{ color: colors.surfaceAlt }}
       >
         <Ionicons name="cloud-offline-outline" size={18} color={colors.textFaint} />
@@ -56,7 +57,10 @@ export function ItemCard({
       ? (item.embedJson as { quote?: { name?: string; handle?: string; text?: string } })
           .quote
       : undefined;
-  const thumbAspect = THUMB_ASPECT[item.type] ?? 16 / 9;
+  const thumbAspect =
+    item.thumbWidth && item.thumbHeight
+      ? item.thumbWidth / item.thumbHeight
+      : (THUMB_ASPECT[item.type] ?? 16 / 9);
 
   return (
     <Pressable
@@ -65,7 +69,7 @@ export function ItemCard({
         item.type === "note" && styles.noteCard,
         pressed && styles.pressed,
       ]}
-      onPress={() => onPress?.(item.id)}
+        onPress={() => onPress?.(item)}
       android_ripple={{
         color: item.type === "note" ? "#f3e8c8" : colors.surfaceAlt,
       }}
@@ -90,7 +94,8 @@ export function ItemCard({
             style={[styles.thumbnail, { aspectRatio: thumbAspect }]}
             contentFit="cover"
             recyclingKey={item.id}
-            transition={150}
+            cachePolicy="memory-disk"
+            transition={0}
           />
           {item.type === "youtube" ? (
             <View style={styles.playOverlay}>
@@ -157,7 +162,7 @@ export function ItemCard({
       </Text>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

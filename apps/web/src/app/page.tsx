@@ -8,7 +8,7 @@ import { api } from "../../convex/_generated/api";
 import SignIn from "../components/SignIn";
 import { CaptureFab } from "../components/CaptureFab";
 import { CommandMenu, type CommandActions } from "../components/CommandMenu";
-import Grid from "../components/Grid";
+import Grid, { GridSkeleton } from "../components/Grid";
 import { ItemCard } from "../components/ItemCard";
 import { SearchBar, type SearchMode } from "../components/SearchBar";
 import { ThemeRail } from "../components/ThemeRail";
@@ -22,11 +22,15 @@ export default function Home() {
   const { signOut } = useAuthActions();
   const [mode, setMode] = useState<SearchMode>("search");
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Card[] | null>(null);
+  const [hybrid, setHybrid] = useState<{ q: string; cards: Card[] } | null>(
+    null,
+  );
   const [askAnswer, setAskAnswer] = useState<string | null>(null);
   const [askSources, setAskSources] = useState<Card[] | null>(null);
   const [askBusy, setAskBusy] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [open, setOpen] = useState<{ id: string; preview?: Card } | null>(
+    null,
+  );
   const [serNonce, setSerNonce] = useState<number | null>(null);
   const [filterType, setFilterType] = useState<ItemType | undefined>(undefined);
   const [captureOpen, setCaptureOpen] = useState(false);
@@ -39,24 +43,34 @@ export default function Home() {
   const heroInput = useRef<HTMLInputElement>(null);
   const dockInput = useRef<HTMLInputElement>(null);
 
+  const [debounced, setDebounced] = useState("");
   useEffect(() => {
     if (mode !== "search") return;
-    const q = query.trim();
-    if (!q) return;
+    const t = setTimeout(() => setDebounced(query.trim()), 200);
+    return () => clearTimeout(t);
+  }, [query, mode]);
+
+  const keywordHits = useQuery(
+    api.search.keyword,
+    isAuthenticated && mode === "search" && debounced.length >= 2
+      ? { q: debounced }
+      : "skip",
+  );
+
+  useEffect(() => {
+    if (mode !== "search" || debounced.length < 2) return;
     let cancelled = false;
-    const t = setTimeout(async () => {
-      try {
-        const r = await searchAction({ q });
-        if (!cancelled) setResults(r);
-      } catch {
-        if (!cancelled) setResults([]);
-      }
-    }, 400);
+    void searchAction({ q: debounced })
+      .then((r) => {
+        if (!cancelled) setHybrid({ q: debounced, cards: r });
+      })
+      .catch(() => {
+        if (!cancelled) setHybrid({ q: debounced, cards: [] });
+      });
     return () => {
       cancelled = true;
-      clearTimeout(t);
     };
-  }, [query, searchAction, mode]);
+  }, [debounced, searchAction, mode]);
 
   // Once the hero has scrolled away, the search bar rides along at the bottom.
   useEffect(() => {
@@ -125,7 +139,7 @@ export default function Home() {
   function changeMode(next: SearchMode) {
     setMode(next);
     clearAsk();
-    if (next === "ask") setResults(null);
+    if (next === "ask") setHybrid(null);
   }
 
   const actions: CommandActions = {
@@ -137,7 +151,7 @@ export default function Home() {
     },
     ask: (q) => {
       setMode("ask");
-      setResults(null);
+      setHybrid(null);
       setQuery(q);
       void submitAsk(q);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -145,7 +159,7 @@ export default function Home() {
     newMemory: () => setCaptureOpen(true),
     setFilter: (type) => {
       setQuery("");
-      setResults(null);
+      setHybrid(null);
       clearAsk();
       setFilterType(type);
     },
@@ -154,8 +168,24 @@ export default function Home() {
     signOut: () => void signOut(),
   };
 
+  const results = hybrid?.q === debounced ? hybrid.cards : null;
   const showResults = mode === "search" && query.trim().length > 0;
   const showAsk = mode === "ask" && (askBusy || askAnswer !== null);
+  const searchCards = results ?? keywordHits ?? [];
+  const searchPending =
+    showResults &&
+    debounced.length >= 2 &&
+    results === null &&
+    (keywordHits === undefined || keywordHits.length === 0);
+  const searchEmpty =
+    showResults &&
+    debounced.length >= 2 &&
+    !searchPending &&
+    searchCards.length === 0;
+
+  function openItem(item: Card) {
+    setOpen({ id: item.id, preview: item });
+  }
 
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
     return (
@@ -177,10 +207,13 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <p className="font-serif text-2xl italic text-stone-400 dark:text-[#6b6b75]">
-          Opening your mind…
-        </p>
+      <main className="min-h-screen md:pl-16">
+        <div className="px-8 pt-12 md:px-14">
+          <div className="h-14 w-2/3 border-b border-stone-300 dark:border-[#2a2a31]" />
+        </div>
+        <div className="w-full px-6 pb-16 pt-10 md:px-8">
+          <CachedGrid />
+        </div>
       </main>
     );
   }
@@ -221,7 +254,7 @@ export default function Home() {
                 {(askSources ?? []).length > 0 ? (
                   <div className={`mt-10 ${MASONRY}`}>
                     {(askSources ?? []).map((item) => (
-                      <ItemCard key={item.id} item={item} onOpen={setOpenId} />
+                      <ItemCard key={item.id} item={item} onOpen={openItem} />
                     ))}
                   </div>
                 ) : null}
@@ -230,7 +263,11 @@ export default function Home() {
           </section>
         ) : showResults ? (
           <section className="mt-10">
-            {(results ?? []).length === 0 ? (
+            {searchPending ? (
+              <p className="font-serif text-2xl italic text-stone-400 dark:text-[#6b6b75]">
+                Looking through your mind…
+              </p>
+            ) : searchEmpty ? (
               <div className="py-24 text-center">
                 <p className="font-serif text-3xl italic text-stone-400 dark:text-[#6b6b75]">
                   Nothing found for “{query}”.
@@ -239,26 +276,25 @@ export default function Home() {
             ) : (
               <>
                 <p className="mb-8 text-center text-xs tracking-wide text-stone-400 dark:text-[#6b6b75]">
-                  {(results ?? []).length}{" "}
-                  {(results ?? []).length === 1 ? "memory" : "memories"} found
+                  {searchCards.length}{" "}
+                  {searchCards.length === 1 ? "memory" : "memories"} found
                 </p>
                 <div className={MASONRY}>
-                  {(results ?? []).map((item) => (
-                    <ItemCard key={item.id} item={item} onOpen={setOpenId} />
+                  {searchCards.map((item) => (
+                    <ItemCard key={item.id} item={item} onOpen={openItem} />
                   ))}
                 </div>
               </>
             )}
           </section>
-        ) : (
-          <div className="mt-10">
-            <Grid
-              onOpen={setOpenId}
-              type={filterType}
-              onTypeChange={setFilterType}
-            />
-          </div>
-        )}
+        ) : null}
+        <div className={`mt-10 ${showAsk || showResults ? "hidden" : ""}`}>
+          <Grid
+            onOpen={openItem}
+            type={filterType}
+            onTypeChange={setFilterType}
+          />
+        </div>
       </div>
 
       {/* The hero's stand-in once it has scrolled off the top. */}
@@ -295,24 +331,51 @@ export default function Home() {
           onClose={() => setSerNonce(null)}
           onOpen={(id) => {
             setSerNonce(null);
-            setOpenId(id);
+            setOpen({ id });
           }}
         />
-      ) : openId ? (
-        <ItemModal itemId={openId} onClose={() => setOpenId(null)} />
+      ) : open ? (
+        <ItemModal
+          itemId={open.id}
+          preview={open.preview}
+          onClose={() => setOpen(null)}
+        />
       ) : null}
     </main>
+  );
+}
+
+function readCachedCards(): Card[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem("mv-cards");
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Card[];
+    return Array.isArray(parsed) ? parsed.slice(0, 24) : [];
+  } catch {
+    return [];
+  }
+}
+
+function CachedGrid() {
+  const [cards] = useState(readCachedCards);
+  if (cards.length === 0) return <GridSkeleton />;
+  return (
+    <div className={MASONRY}>
+      {cards.map((item) => (
+        <ItemCard key={item.id} item={item} />
+      ))}
+    </div>
   );
 }
 
 function SerendipityOpener({
   nonce,
   onClose,
-  onOpen,
 }: {
   nonce: number;
   onClose: () => void;
-  onOpen: (id: string) => void;
+  onOpen?: (id: string) => void;
 }) {
   const res = useQuery(api.items.serendipity, { nonce });
   if (res === undefined)

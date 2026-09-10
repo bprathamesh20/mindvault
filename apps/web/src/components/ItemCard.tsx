@@ -3,6 +3,7 @@
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { optimisticRemoveItem } from "../lib/optimistic";
 import type { Card } from "./types";
 import { DocumentPreview } from "./DocumentPreview";
 
@@ -11,9 +12,11 @@ export function ItemCard({
   onOpen,
 }: {
   item: Card;
-  onOpen?: (id: string) => void;
+  onOpen?: (item: Card) => void;
 }) {
-  const removeItem = useMutation(api.items.removeItem);
+  const removeItem = useMutation(api.items.removeItem).withOptimisticUpdate(
+    (localStore, args) => optimisticRemoveItem(localStore, args.id),
+  );
 
   if (item.status === "pending") {
     return (
@@ -50,8 +53,8 @@ export function ItemCard({
 
   return (
     <div
-      onClick={() => onOpen?.(item.id)}
-      className={`surface group mb-5 break-inside-avoid overflow-hidden rounded-xl border shadow-sm transition-all duration-200 hover:shadow-lg hover:brightness-[1.02] dark:shadow-none ${
+      onClick={() => onOpen?.(item)}
+      className={`surface group relative mb-5 break-inside-avoid overflow-hidden rounded-xl border shadow-sm transition duration-200 hover:shadow-lg hover:brightness-[1.02] dark:shadow-none ${
         item.type === "note"
           ? "border-amber-200/70 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20"
           : ""
@@ -67,7 +70,16 @@ export function ItemCard({
         <img
           src={item.thumbnailUrl}
           alt={item.title ?? ""}
+          width={item.thumbWidth}
+          height={item.thumbHeight}
+          loading="lazy"
+          decoding="async"
           className="mt-3 max-h-[420px] w-full object-cover brightness-[0.98] first:mt-0 dark:brightness-[0.85]"
+          style={
+            item.thumbWidth && item.thumbHeight
+              ? { aspectRatio: `${item.thumbWidth} / ${item.thumbHeight}` }
+              : undefined
+          }
         />
       ) : null}
       <div className={item.thumbnailUrl ? "p-4 pt-3" : "p-4"}>

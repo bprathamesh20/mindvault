@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { ItemCard } from "./ItemCard";
 import { MASONRY } from "./layout";
-import type { ItemType } from "./types";
+import type { Card, ItemType } from "./types";
 
 const FILTERS = [
   { label: "All", value: undefined },
@@ -17,19 +17,25 @@ const FILTERS = [
   { label: "Notes", value: "note" },
 ] as const;
 
-type Space = {
-  id: string;
-  name: string;
-  type?: ItemType;
-  tag?: string;
-};
+export function GridSkeleton() {
+  return (
+    <div className={MASONRY}>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div
+          key={i}
+          className="mb-5 h-48 break-inside-avoid animate-pulse rounded-xl bg-stone-200 dark:bg-[#232329]"
+        />
+      ))}
+    </div>
+  );
+}
 
 export default function Grid({
   onOpen,
   type,
   onTypeChange,
 }: {
-  onOpen?: (id: string) => void;
+  onOpen?: (item: Card) => void;
   // Owned by the page so the command menu can drive it too.
   type: ItemType | undefined;
   onTypeChange: (type: ItemType | undefined) => void;
@@ -48,6 +54,15 @@ export default function Grid({
     { type, tag: tag ?? undefined },
     { initialNumItems: 24 },
   );
+
+  useEffect(() => {
+    if (results.length === 0 || type || tag) return;
+    try {
+      localStorage.setItem("mv-cards", JSON.stringify(results.slice(0, 24)));
+    } catch {
+      /* quota */
+    }
+  }, [results, type, tag]);
 
   const filterActive = type !== undefined || tag !== null;
 
@@ -149,7 +164,9 @@ export default function Grid({
         </div>
       )}
 
-      {results.length === 0 && !isLoading ? (
+      {results.length === 0 && isLoading ? (
+        <GridSkeleton />
+      ) : results.length === 0 ? (
         <div className="py-24 text-center">
           <p className="font-serif text-2xl italic text-stone-400 dark:text-[#6b6b75]">
             {filterActive ? "Nothing here yet." : "Your mind is empty."}
