@@ -1,9 +1,5 @@
 "use client";
 
-import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
-import { optimisticRemoveItem } from "../lib/optimistic";
 import type { Card } from "./types";
 import { DocumentPreview } from "./DocumentPreview";
 
@@ -14,10 +10,6 @@ export function ItemCard({
   item: Card;
   onOpen?: (item: Card) => void;
 }) {
-  const removeItem = useMutation(api.items.removeItem).withOptimisticUpdate(
-    (localStore, args) => optimisticRemoveItem(localStore, args.id),
-  );
-
   if (item.status === "pending") {
     return (
       <div className="surface mb-5 break-inside-avoid animate-pulse rounded-xl border p-5 opacity-70">
@@ -143,18 +135,6 @@ export function ItemCard({
           {[item.sourceDomain, timeAgo(item.savedAt)].filter(Boolean).join(" · ")}
         </p>
       </div>
-      {onOpen ? (
-        <button
-          aria-label="Delete"
-          onClick={(e) => {
-            e.stopPropagation();
-            void removeItem({ id: item.id as Id<"items"> });
-          }}
-          className="absolute right-2 top-2 rounded-full opacity-0 transition hover:text-red-400 [div.group:hover>&]:opacity-100"
-        >
-          ✕
-        </button>
-      ) : null}
     </div>
   );
 }

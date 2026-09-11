@@ -286,37 +286,6 @@ export const get = query({
   },
 });
 
-export const serendipity = query({
-  // nonce: bump it to re-roll; the value itself is ignored
-  args: { nonce: v.optional(v.number()) },
-  returns: v.union(v.id("items"), v.null()),
-  handler: async (ctx, args) => {
-    await requireUserIdentity(ctx);
-    const newest = await ctx.db
-      .query("items")
-      .withIndex("by_status_and_savedAt", (q) => q.eq("status", "ready"))
-      .order("desc")
-      .take(1);
-    if (newest.length === 0) return null;
-    const oldest = await ctx.db
-      .query("items")
-      .withIndex("by_status_and_savedAt", (q) => q.eq("status", "ready"))
-      .order("asc")
-      .take(1);
-    const span = newest[0].savedAt - (oldest[0]?.savedAt ?? newest[0].savedAt);
-    const u = ((args.nonce ?? 1) % 997) / 997;
-    const probe = (oldest[0]?.savedAt ?? newest[0].savedAt) + u * Math.max(span, 1);
-    const hit = await ctx.db
-      .query("items")
-      .withIndex("by_status_and_savedAt", (q) =>
-        q.eq("status", "ready").gte("savedAt", probe),
-      )
-      .order("asc")
-      .take(1);
-    return (hit[0] ?? newest[0])._id;
-  },
-});
-
 export const update = mutation({
   args: {
     id: v.id("items"),
@@ -367,7 +336,7 @@ export const addTag = mutation({
   handler: async (ctx, args) => {
     await requireUserIdentity(ctx);
     const name = args.name.trim().toLowerCase().slice(0, 30);
-    if (name.length < 2) throw new Error("Tag too short");
+    if (name.length === 0) throw new Error("Tag is empty");
     const item = await ctx.db.get(args.id);
     if (!item) return null;
 

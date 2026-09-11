@@ -8,7 +8,6 @@ export type CommandActions = {
   ask: (q: string) => void;
   newMemory: () => void;
   setFilter: (type: ItemType | undefined) => void;
-  serendipity: () => void;
   toggleTheme: () => void;
   signOut: () => void;
 };
@@ -158,13 +157,6 @@ export function CommandMenu({
           setQuery("");
           setActive(0);
         },
-      },
-      {
-        id: "serendipity",
-        label: "Serendipity — resurface a memory",
-        group: "Find",
-        keywords: "random shuffle surprise resurface",
-        run: close(actions.serendipity),
       },
       {
         id: "new-memory",

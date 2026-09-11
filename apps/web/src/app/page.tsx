@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCardCache } from "../lib/card-cache";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
-import { useAction, useQueries, useQuery } from "convex/react";
+import { useAction, useQueries } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import SignIn from "../components/SignIn";
 import { CaptureFab } from "../components/CaptureFab";
@@ -34,7 +34,6 @@ export default function Home() {
   const [open, setOpen] = useState<{ id: string; preview?: Card } | null>(
     null,
   );
-  const [serNonce, setSerNonce] = useState<number | null>(null);
   const [filterType, setFilterType] = useState<ItemType | undefined>(undefined);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -170,7 +169,6 @@ export default function Home() {
       clearAsk();
       setFilterType(type);
     },
-    serendipity: () => setSerNonce(Date.now()),
     toggleTheme: () => void toggleTheme(),
     signOut: () => void signOut(),
   };
@@ -231,7 +229,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen md:pl-16">
-      <ThemeRail onSerendipity={() => setSerNonce(Date.now())} />
+      <ThemeRail />
 
       <SearchBar
         variant="hero"
@@ -332,12 +330,7 @@ export default function Home() {
         <CommandMenu onClose={() => setPaletteOpen(false)} actions={actions} />
       ) : null}
 
-      {serNonce !== null ? (
-        <SerendipityOpener
-          nonce={serNonce}
-          onClose={() => setSerNonce(null)}
-        />
-      ) : open ? (
+      {open ? (
         <ItemModal
           itemId={open.id}
           preview={open.preview}
@@ -358,27 +351,4 @@ function CachedGrid() {
       ))}
     </div>
   );
-}
-
-function SerendipityOpener({
-  nonce,
-  onClose,
-}: {
-  nonce: number;
-  onClose: () => void;
-}) {
-  const res = useQuery(api.items.serendipity, { nonce });
-  if (res === undefined)
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <p className="font-serif text-2xl italic text-stone-300">
-          Resurfacing…
-        </p>
-      </div>
-    );
-  if (res === null) {
-    onClose();
-    return null;
-  }
-  return <ItemModal itemId={res} onClose={onClose} />;
 }
