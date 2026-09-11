@@ -22,6 +22,7 @@ function buildTaggingInput(item: ItemDoc): string | undefined {
     case "youtube":
     case "note":
     case "link":
+    case "github":
     case "image":
     case "document":
       return `${title}${text ? `\n\n${text}` : ""}`.slice(0, 6000).trim() || undefined;

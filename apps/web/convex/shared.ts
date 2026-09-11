@@ -9,6 +9,7 @@ export const ITEM_TYPES = [
   "note",
   "link",
   "document",
+  "github",
 ] as const;
 
 export const DOCUMENT_MAX_BYTES = 15 * 1024 * 1024;
@@ -89,7 +90,10 @@ export function detectType(url: string): ItemType {
   if (host === "youtube.com" || host === "youtu.be") {
     return "youtube";
   }
-  if (host === "pin.it" || host === "github.com") {
+  if (host === "github.com") {
+    return "github";
+  }
+  if (host === "pin.it") {
     return "link";
   }
   return "article";

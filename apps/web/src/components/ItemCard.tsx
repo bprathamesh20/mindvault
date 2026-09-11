@@ -2,10 +2,15 @@
 
 import type { ComponentType, MouseEvent, ReactNode } from "react";
 import {
+  CircleDot,
   Ellipsis,
   FileSpreadsheet,
   FileText,
+  GitFork,
+  GitMerge,
+  GitPullRequest,
   Heart,
+  MessageSquare,
   Image as ImageIcon,
   Link2,
   LoaderCircle,
@@ -13,8 +18,10 @@ import {
   Play,
   Presentation,
   Repeat2,
+  Star,
   StickyNote,
   TriangleAlert,
+  Users,
 } from "lucide-react";
 import type { Card } from "./types";
 
@@ -228,9 +235,18 @@ function YouTubeMark({ size = 14, className }: MarkProps) {
   );
 }
 
+function GitHubMark({ size = 14, className }: MarkProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" className={className} aria-hidden>
+      <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+    </svg>
+  );
+}
+
 /* Wrap the brand marks so they satisfy the BadgeSpec icon signature. */
 const IGIcon = (p: MarkProps) => <InstagramMark {...p} />;
 const YTIcon = (p: MarkProps) => <YouTubeMark {...p} />;
+const GHIcon = (p: MarkProps) => <GitHubMark {...p} />;
 
 /* ------------------------------------------------------------------ */
 /* Per-type badge specs                                                */
@@ -324,6 +340,8 @@ export function ItemCard({
       return <LinkCard item={item} onOpen={onOpen} />;
     case "document":
       return <DocumentCard item={item} onOpen={onOpen} />;
+    case "github":
+      return <GitHubCard item={item} onOpen={onOpen} />;
     case "article":
     default:
       return <ArticleCard item={item} onOpen={onOpen} />;
@@ -664,6 +682,168 @@ function formatBytes(n: number | undefined): string | undefined {
   if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
   if (n >= 1024) return `${Math.round(n / 1024)} KB`;
   return `${n} B`;
+}
+
+/* ------------------------------------------------------------------ */
+/* GitHub                                                              */
+/* ------------------------------------------------------------------ */
+
+const GH_CHIP = "bg-[#24292f] text-white dark:bg-white dark:text-[#24292f]";
+
+const LANGUAGE_COLORS: Record<string, string> = {
+  TypeScript: "#3178c6", JavaScript: "#f1e05a", Python: "#3572a5", Rust: "#dea584",
+  Go: "#00add8", Java: "#b07219", C: "#555555", "C++": "#f34b7d", "C#": "#178600",
+  Ruby: "#701516", Swift: "#f05138", Kotlin: "#a97bff", Dart: "#00b4ab", Shell: "#89e051",
+  HTML: "#e34c26", CSS: "#663399", PHP: "#4f5d95", Scala: "#c22d40", Elixir: "#6e4a7e",
+  Haskell: "#5e5086", Lua: "#000080", Zig: "#ec915c", Vue: "#41b883", Svelte: "#ff3e00",
+  "Jupyter Notebook": "#da5b0b", "Objective-C": "#438eff", Clojure: "#db5855", R: "#198ce7",
+};
+
+function GitHubCard({ item, onOpen }: Props) {
+  const open = onOpen ? () => onOpen(item) : undefined;
+  const e = item.embedJson;
+  const kind = embedString(e, "kind") ?? "repo";
+  const owner = embedString(e, "owner") ?? item.author?.replace(/^@/, "") ?? "";
+  const repo = embedString(e, "repo");
+  const spec: BadgeSpec = {
+    label: kind === "issue" ? "Issue" : kind === "pull" ? "Pull request" : kind === "user" ? "Profile" : "GitHub",
+    Icon: GHIcon,
+    chip: GH_CHIP,
+  };
+  const avatar = item.thumbnailUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={item.thumbnailUrl}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      className={`h-8 w-8 shrink-0 object-cover ring-1 ring-black/5 dark:ring-white/10 ${kind === "user" ? "rounded-full" : "rounded-lg"}`}
+    />
+  ) : (
+    <Avatar seed={owner || "gh"} size={32} />
+  );
+
+  let body: ReactNode;
+  if (kind === "issue" || kind === "pull") {
+    const state = embedString(e, "state") ?? "open";
+    const number = embedNumber(e, "number");
+    const comments = embedNumber(e, "comments");
+    const additions = embedNumber(e, "additions");
+    const deletions = embedNumber(e, "deletions");
+    const stateCls =
+      state === "merged"
+        ? "bg-violet-500/15 text-violet-600 dark:text-violet-300"
+        : state === "closed"
+          ? "bg-rose-500/15 text-rose-600 dark:text-rose-300"
+          : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300";
+    const StateIcon = kind === "pull" ? (state === "merged" ? GitMerge : GitPullRequest) : CircleDot;
+    body = (
+      <>
+        <div className="flex items-center gap-2.5">
+          {avatar}
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-[12.5px] text-stone-500 dark:text-[#9a9aa6]">
+              {embedString(e, "fullName") ?? `${owner}/${repo ?? ""}`}
+              {number ? <span className="text-stone-400 dark:text-[#6e6e7a]"> #{number}</span> : null}
+            </p>
+            <p className={`truncate ${META}`}>{item.author ?? owner}</p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-start gap-2">
+          <span className={`mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold capitalize ${stateCls}`}>
+            <StateIcon size={11} strokeWidth={2.5} />
+            {state}
+          </span>
+          {item.title ? <h2 className={`${TITLE} line-clamp-2`}>{item.title}</h2> : null}
+        </div>
+        {item.summary ?? item.preview ? (
+          <p className={`${BODY} mt-1.5 line-clamp-2`}>{item.summary ?? item.preview}</p>
+        ) : null}
+        <div className="mt-3 flex items-center gap-4 text-[12px] text-stone-400 dark:text-[#7c7c88]">
+          {comments !== undefined ? (
+            <span className="inline-flex items-center gap-1.5"><MessageSquare size={13} />{compact(comments)}</span>
+          ) : null}
+          {additions !== undefined || deletions !== undefined ? (
+            <span className="inline-flex items-center gap-1.5 font-medium">
+              <span className="text-emerald-500">+{compact(additions ?? 0)}</span>
+              <span className="text-rose-500">−{compact(deletions ?? 0)}</span>
+            </span>
+          ) : null}
+        </div>
+      </>
+    );
+  } else if (kind === "user") {
+    const followers = embedNumber(e, "followers");
+    const repos = embedNumber(e, "publicRepos");
+    body = (
+      <>
+        <div className="flex items-center gap-3">
+          {avatar}
+          <div className="min-w-0 leading-tight">
+            <h2 className={`${TITLE} truncate`}>{item.title ?? owner}</h2>
+            <p className={`truncate ${META}`}>@{owner}</p>
+          </div>
+        </div>
+        {embedString(e, "bio") ? <p className={`${BODY} mt-2.5 line-clamp-2`}>{embedString(e, "bio")}</p> : null}
+        <div className="mt-3 flex items-center gap-4 text-[12px] text-stone-400 dark:text-[#7c7c88]">
+          {followers !== undefined ? (
+            <span className="inline-flex items-center gap-1.5"><Users size={13} />{compact(followers)} followers</span>
+          ) : null}
+          {repos !== undefined ? <span>{compact(repos)} repos</span> : null}
+        </div>
+      </>
+    );
+  } else {
+    const stars = embedNumber(e, "stars");
+    const forks = embedNumber(e, "forks");
+    const language = embedString(e, "language");
+    const description = embedString(e, "description") ?? item.summary ?? item.preview;
+    const path = embedString(e, "path");
+    body = (
+      <>
+        <div className="flex items-center gap-2.5">
+          {avatar}
+          <h2 className={`${TITLE} min-w-0 truncate`}>
+            <span className="font-normal text-stone-500 dark:text-[#9a9aa6]">{owner}/</span>
+            {repo ?? item.title}
+          </h2>
+        </div>
+        {path ? (
+          <p className={`mt-2 truncate rounded-md bg-stone-100 px-2 py-1 font-mono text-[11px] text-stone-500 dark:bg-white/[0.05] dark:text-[#9a9aa6]`}>
+            {path}
+          </p>
+        ) : null}
+        {description ? <p className={`${BODY} mt-2.5 line-clamp-2`}>{description}</p> : null}
+        {stars !== undefined || forks !== undefined || language ? (
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-stone-400 dark:text-[#7c7c88]">
+            {stars !== undefined ? (
+              <span className="inline-flex items-center gap-1.5"><Star size={13} />{compact(stars)}</span>
+            ) : null}
+            {forks !== undefined ? (
+              <span className="inline-flex items-center gap-1.5"><GitFork size={13} />{compact(forks)}</span>
+            ) : null}
+            {language ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full ring-1 ring-black/10 dark:ring-white/10" style={{ background: LANGUAGE_COLORS[language] ?? "#8b8b94" }} />
+                {language}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <Shell item={item} onOpen={onOpen}>
+      <Header spec={spec} onKebab={open} />
+      <div className="px-4 pb-4 pt-3">
+        {body}
+        <Tags tags={item.tags ?? []} />
+        <Footer left="github.com" savedAt={item.savedAt} />
+      </div>
+    </Shell>
+  );
 }
 
 /* ------------------------------------------------------------------ */

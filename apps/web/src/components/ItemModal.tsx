@@ -297,7 +297,7 @@ export function ItemModal({
                 )}
               </button>
             )
-          ) : it.thumbnailUrl && it.type !== "note" ? (
+          ) : it.thumbnailUrl && it.type !== "note" && it.type !== "github" ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={it.thumbnailUrl}

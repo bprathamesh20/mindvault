@@ -301,6 +301,154 @@ async function extractArticle(url: URL): Promise<Extracted> {
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* GitHub — repos, issues, pull requests and profiles via the REST API */
+/* ------------------------------------------------------------------ */
+
+const GH_API = "https://api.github.com";
+
+function ghHeaders(accept = "application/vnd.github+json"): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: accept,
+    "User-Agent": UA,
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+  // Optional: raises the unauthenticated 60 req/h limit to 5000.
+  const token = process.env.GITHUB_TOKEN;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+async function ghJson(path: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`${GH_API}${path}`, { headers: ghHeaders() });
+  if (!res.ok) throw new Error(`GitHub API ${res.status} for ${path}`);
+  return (await res.json()) as Record<string, unknown>;
+}
+
+const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined);
+const num = (v: unknown): number | undefined => (typeof v === "number" ? v : undefined);
+
+function ghAvatar(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const u = new URL(url);
+    u.searchParams.set("s", "160");
+    return u.href;
+  } catch {
+    return url;
+  }
+}
+
+async function extractGitHub(url: URL): Promise<Extracted> {
+  const parts = url.pathname.split("/").filter(Boolean);
+  const [owner, repo, section, number] = parts;
+  if (!owner) throw new Error("Not a GitHub page");
+  const base = { provider: "github", owner };
+
+  if (!repo) {
+    const user = await ghJson(`/users/${owner}`);
+    const name = str(user.name) ?? owner;
+    const bio = str(user.bio);
+    return {
+      title: name,
+      author: owner,
+      text: [bio, str(user.company), str(user.location)].filter(Boolean).join("\n"),
+      thumbnailUrl: ghAvatar(str(user.avatar_url)),
+      embedJson: {
+        ...base,
+        kind: "user",
+        login: owner,
+        name,
+        bio,
+        followers: num(user.followers),
+        publicRepos: num(user.public_repos),
+      },
+    };
+  }
+
+  if ((section === "issues" || section === "pull") && number && /^\d+$/.test(number)) {
+    const issue = await ghJson(`/repos/${owner}/${repo}/issues/${number}`);
+    const isPull = section === "pull" || "pull_request" in issue;
+    let state = str(issue.state) ?? "open";
+    let diff: Record<string, unknown> = {};
+    if (isPull) {
+      try {
+        const pr = await ghJson(`/repos/${owner}/${repo}/pulls/${number}`);
+        if (pr.merged === true) state = "merged";
+        diff = {
+          additions: num(pr.additions),
+          deletions: num(pr.deletions),
+          changedFiles: num(pr.changed_files),
+        };
+      } catch {
+        // The issues endpoint already gave us enough for a card.
+      }
+    }
+    const user = issue.user as Record<string, unknown> | undefined;
+    const labels = Array.isArray(issue.labels)
+      ? issue.labels
+          .map((l) => (l && typeof l === "object" && "name" in l ? str((l as { name: unknown }).name) : str(l)))
+          .filter((l): l is string => Boolean(l))
+          .slice(0, 5)
+      : [];
+    return {
+      title: str(issue.title),
+      author: str(user?.login),
+      text: str(issue.body)?.slice(0, 50000),
+      thumbnailUrl: ghAvatar(str(user?.avatar_url)),
+      embedJson: {
+        ...base,
+        repo,
+        fullName: `${owner}/${repo}`,
+        kind: isPull ? "pull" : "issue",
+        number: Number(number),
+        state,
+        comments: num(issue.comments),
+        labels,
+        ...diff,
+      },
+    };
+  }
+
+  const r = await ghJson(`/repos/${owner}/${repo}`);
+  const ownerObj = r.owner as Record<string, unknown> | undefined;
+  let readme: string | undefined;
+  try {
+    const res = await fetch(`${GH_API}/repos/${owner}/${repo}/readme`, {
+      headers: ghHeaders("application/vnd.github.raw+json"),
+    });
+    if (res.ok) readme = (await res.text()).slice(0, 60000);
+  } catch {
+    // README is a nice-to-have for search and summaries.
+  }
+  const description = str(r.description);
+  const fullName = str(r.full_name) ?? `${owner}/${repo}`;
+  const license = r.license as Record<string, unknown> | null | undefined;
+  return {
+    title: fullName,
+    author: str(ownerObj?.login) ?? owner,
+    text: [description, readme].filter(Boolean).join("\n\n"),
+    thumbnailUrl: ghAvatar(str(ownerObj?.avatar_url)),
+    embedJson: {
+      ...base,
+      repo,
+      fullName,
+      kind: "repo",
+      description,
+      stars: num(r.stargazers_count),
+      forks: num(r.forks_count),
+      openIssues: num(r.open_issues_count),
+      language: str(r.language),
+      topics: Array.isArray(r.topics) ? r.topics.filter((t): t is string => typeof t === "string").slice(0, 6) : [],
+      license: str(license?.spdx_id),
+      homepage: str(r.homepage),
+      archived: r.archived === true,
+      pushedAt: str(r.pushed_at),
+      ...(section ? { path: parts.slice(2).join("/") } : {}),
+    },
+  };
+}
+
 function convertFailureMessage(error: unknown): string {
   const code =
     error && typeof error === "object" && "code" in error
@@ -450,6 +598,15 @@ export const enrich = internalAction({
         extracted = await extractInstagram(url);
       } else if (host === "youtube.com" || host === "youtu.be") {
         extracted = await extractYouTube(url);
+      } else if (host === "github.com") {
+        try {
+          extracted = await extractGitHub(url);
+        } catch {
+          // Rate limited or an unusual page: keep the GitHub card, fall back
+          // to the page's own metadata.
+          extracted = await extractArticle(url);
+          extracted.embedJson = { ...(extracted.embedJson ?? {}), provider: "github", kind: "page" };
+        }
       } else {
         extracted = await extractArticle(url);
       }

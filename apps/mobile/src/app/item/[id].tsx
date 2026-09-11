@@ -144,6 +144,7 @@ function ItemScreen({ itemId }: { itemId: string }) {
   const isYouTube = it.type === "youtube";
   const isInstagram = it.type === "instagram";
   const isNote = it.type === "note";
+  const isGitHub = it.type === "github";
   const ytId = typeof embed.videoId === "string" ? embed.videoId : undefined;
   const ytPoster = ytId
     ? ytHiResFailed
@@ -242,7 +243,7 @@ function ItemScreen({ itemId }: { itemId: string }) {
               contentFit="cover"
             />
           </Pressable>
-        ) : it.thumbnailUrl && !isNote ? (
+        ) : it.thumbnailUrl && !isNote && !isGitHub ? (
           <Image
             source={{ uri: it.thumbnailUrl }}
             style={styles.heroImage}

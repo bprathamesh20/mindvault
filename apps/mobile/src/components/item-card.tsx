@@ -2,7 +2,7 @@ import { memo, type ComponentProps, type ReactNode } from "react";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Card } from "../lib/types";
 import { colors, fonts, radius } from "../lib/theme";
 import { timeAgo, domainOf } from "../lib/format";
@@ -27,6 +27,16 @@ const NOTE: BadgeSpec = { label: "Note", icon: "document-text", bg: "#8b5cf6" };
 const LINK: BadgeSpec = { label: "Link", icon: "link", bg: "#0ea5e9" };
 const PENDING: BadgeSpec = { label: "Saving…", icon: "sync-outline", bg: colors.surfaceAlt, fg: colors.textMuted };
 const FAILED: BadgeSpec = { label: "Couldn't save", icon: "warning", bg: "#f59e0b" };
+const GITHUB_BG = "#24292f";
+
+const LANGUAGE_COLORS: Record<string, string> = {
+  TypeScript: "#3178c6", JavaScript: "#f1e05a", Python: "#3572a5", Rust: "#dea584",
+  Go: "#00add8", Java: "#b07219", C: "#555555", "C++": "#f34b7d", "C#": "#178600",
+  Ruby: "#701516", Swift: "#f05138", Kotlin: "#a97bff", Dart: "#00b4ab", Shell: "#89e051",
+  HTML: "#e34c26", CSS: "#663399", PHP: "#4f5d95", Scala: "#c22d40", Elixir: "#6e4a7e",
+  Haskell: "#5e5086", Lua: "#000080", Zig: "#ec915c", Vue: "#41b883", Svelte: "#ff3e00",
+  "Jupyter Notebook": "#da5b0b", "Objective-C": "#438eff", Clojure: "#db5855", R: "#198ce7",
+};
 const IG_GRADIENT = ["#f9ce34", "#ee2a7b", "#6228d7"] as const;
 
 function instagramSpec(item: Card): BadgeSpec {
@@ -318,6 +328,8 @@ export const ItemCard = memo(function ItemCard({
       return <LinkCard item={item} onPress={onPress} />;
     case "document":
       return <DocumentCard item={item} onPress={onPress} />;
+    case "github":
+      return <GitHubCard item={item} onPress={onPress} />;
     case "article":
     default:
       return <ArticleCard item={item} onPress={onPress} />;
@@ -672,6 +684,180 @@ function DocumentCover({ item, spec }: { item: Card; spec: BadgeSpec }) {
   );
 }
 
+function GitHubCard({ item, onPress }: Props) {
+  const e = item.embedJson;
+  const kind = embedString(e, "kind") ?? "repo";
+  const owner = embedString(e, "owner") ?? item.author?.replace(/^@/, "") ?? "";
+  const repo = embedString(e, "repo");
+  const spec: BadgeSpec = {
+    label: kind === "issue" ? "Issue" : kind === "pull" ? "Pull request" : kind === "user" ? "Profile" : "GitHub",
+    icon: "logo-github",
+    bg: GITHUB_BG,
+  };
+  const avatar = item.thumbnailUrl ? (
+    <Image
+      source={{ uri: item.thumbnailUrl }}
+      style={[styles.ghAvatar, kind === "user" && { borderRadius: 16 }]}
+      contentFit="cover"
+      recyclingKey={item.id}
+      cachePolicy="memory-disk"
+      transition={0}
+    />
+  ) : (
+    <Avatar seed={owner || "gh"} size={32} />
+  );
+
+  let body: ReactNode;
+  if (kind === "issue" || kind === "pull") {
+    const state = embedString(e, "state") ?? "open";
+    const number = embedNumber(e, "number");
+    const comments = embedNumber(e, "comments");
+    const additions = embedNumber(e, "additions");
+    const deletions = embedNumber(e, "deletions");
+    const stateColor = state === "merged" ? "#7c3aed" : state === "closed" ? "#e11d48" : "#059669";
+    const stateIcon: IconName =
+      kind === "pull" ? (state === "merged" ? "git-merge-outline" : "git-pull-request-outline") : "ellipse-outline";
+    body = (
+      <>
+        <View style={styles.ghRow}>
+          {avatar}
+          <View style={styles.tweetIdentity}>
+            <Text style={styles.bodyText} numberOfLines={1}>
+              {embedString(e, "fullName") ?? `${owner}/${repo ?? ""}`}
+              {number ? <Text style={styles.meta}> #{number}</Text> : null}
+            </Text>
+            <Text style={styles.meta} numberOfLines={1}>
+              {item.author ?? owner}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.ghStateRow}>
+          <View style={[styles.ghState, { backgroundColor: `${stateColor}22` }]}>
+            <Ionicons name={stateIcon} size={11} color={stateColor} />
+            <Text style={[styles.ghStateText, { color: stateColor }]}>{state}</Text>
+          </View>
+          {item.title ? (
+            <Text style={[styles.title, styles.footerLeft]} numberOfLines={2}>
+              {item.title}
+            </Text>
+          ) : null}
+        </View>
+        {item.summary ?? item.preview ? (
+          <Text style={styles.bodyText} numberOfLines={2}>
+            {item.summary ?? item.preview}
+          </Text>
+        ) : null}
+        <View style={styles.engagement}>
+          {comments !== undefined ? (
+            <View style={styles.engagementItem}>
+              <Ionicons name="chatbubble-outline" size={13} color={colors.textFaint} />
+              <Text style={styles.engagementText}>{compact(comments)}</Text>
+            </View>
+          ) : null}
+          {additions !== undefined || deletions !== undefined ? (
+            <View style={styles.engagementItem}>
+              <Text style={[styles.engagementText, { color: "#059669", fontWeight: "600" }]}>+{compact(additions ?? 0)}</Text>
+              <Text style={[styles.engagementText, { color: "#e11d48", fontWeight: "600" }]}>−{compact(deletions ?? 0)}</Text>
+            </View>
+          ) : null}
+        </View>
+      </>
+    );
+  } else if (kind === "user") {
+    const followers = embedNumber(e, "followers");
+    const repos = embedNumber(e, "publicRepos");
+    body = (
+      <>
+        <View style={styles.ghRow}>
+          {avatar}
+          <View style={styles.tweetIdentity}>
+            <Text style={styles.title} numberOfLines={1}>
+              {item.title ?? owner}
+            </Text>
+            <Text style={styles.meta} numberOfLines={1}>
+              @{owner}
+            </Text>
+          </View>
+        </View>
+        {embedString(e, "bio") ? (
+          <Text style={styles.bodyText} numberOfLines={2}>
+            {embedString(e, "bio")}
+          </Text>
+        ) : null}
+        <View style={styles.engagement}>
+          {followers !== undefined ? (
+            <View style={styles.engagementItem}>
+              <Ionicons name="people-outline" size={13} color={colors.textFaint} />
+              <Text style={styles.engagementText}>{compact(followers)} followers</Text>
+            </View>
+          ) : null}
+          {repos !== undefined ? <Text style={styles.engagementText}>{compact(repos)} repos</Text> : null}
+        </View>
+      </>
+    );
+  } else {
+    const stars = embedNumber(e, "stars");
+    const forks = embedNumber(e, "forks");
+    const language = embedString(e, "language");
+    const description = embedString(e, "description") ?? item.summary ?? item.preview;
+    const path = embedString(e, "path");
+    body = (
+      <>
+        <View style={styles.ghRow}>
+          {avatar}
+          <Text style={[styles.title, styles.footerLeft]} numberOfLines={1}>
+            <Text style={styles.ghOwner}>{owner}/</Text>
+            {repo ?? item.title}
+          </Text>
+        </View>
+        {path ? (
+          <Text style={styles.ghPath} numberOfLines={1}>
+            {path}
+          </Text>
+        ) : null}
+        {description ? (
+          <Text style={styles.bodyText} numberOfLines={2}>
+            {description}
+          </Text>
+        ) : null}
+        {stars !== undefined || forks !== undefined || language ? (
+          <View style={styles.engagement}>
+            {stars !== undefined ? (
+              <View style={styles.engagementItem}>
+                <Ionicons name="star-outline" size={13} color={colors.textFaint} />
+                <Text style={styles.engagementText}>{compact(stars)}</Text>
+              </View>
+            ) : null}
+            {forks !== undefined ? (
+              <View style={styles.engagementItem}>
+                <Ionicons name="git-branch-outline" size={13} color={colors.textFaint} />
+                <Text style={styles.engagementText}>{compact(forks)}</Text>
+              </View>
+            ) : null}
+            {language ? (
+              <View style={styles.engagementItem}>
+                <View style={[styles.langDot, { backgroundColor: LANGUAGE_COLORS[language] ?? "#8b8b94" }]} />
+                <Text style={styles.engagementText}>{language}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <Shell item={item} onPress={onPress}>
+      <Header spec={spec} />
+      <View style={styles.body}>
+        {body}
+        <Tags tags={item.tags} />
+        <Footer left="github.com" savedAt={item.savedAt} />
+      </View>
+    </Shell>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
@@ -913,4 +1099,29 @@ const styles = StyleSheet.create({
   coverKicker: { fontSize: 8, letterSpacing: 1.4, lineHeight: 12, color: "rgba(255,255,255,0.6)", fontWeight: "500" },
 
   skeletonBar: { height: 10, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
+
+  ghRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+  ghAvatar: { width: 32, height: 32, borderRadius: 9, backgroundColor: colors.surfaceAlt },
+  ghOwner: { fontWeight: "400", color: colors.textMuted },
+  ghPath: {
+    fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
+    fontSize: 11,
+    color: colors.textMuted,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+  ghStateRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginTop: 2 },
+  ghState: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 1,
+  },
+  ghStateText: { fontSize: 10.5, fontWeight: "600", textTransform: "capitalize" },
+  langDot: { width: 9, height: 9, borderRadius: 5, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(0,0,0,0.15)" },
 });

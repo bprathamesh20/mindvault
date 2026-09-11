@@ -8,7 +8,8 @@ export type Card = {
     | "image"
     | "note"
     | "link"
-    | "document";
+    | "document"
+    | "github";
   url?: string;
   title?: string;
   author?: string;
