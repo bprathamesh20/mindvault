@@ -16,6 +16,7 @@ export default defineSchema({
       v.literal("note"),
       v.literal("link"),
       v.literal("document"),
+      v.literal("github"),
     ),
     url: v.optional(v.string()),
     title: v.optional(v.string()),

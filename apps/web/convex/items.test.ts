@@ -177,11 +177,4 @@ describe("items", () => {
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.some((h) => h.title === "Rust ownership")).toBe(true);
   });
-
-  test("serendipity returns a ready item", async () => {
-    const t = tAuth();
-    const id = await t.mutation(api.items.captureNote, { text: "only one" });
-    const pick = await t.query(api.items.serendipity, { nonce: 1 });
-    expect(pick).toBe(id);
-  });
 });

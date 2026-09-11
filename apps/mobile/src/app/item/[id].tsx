@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -82,8 +82,24 @@ function ItemScreen({ itemId }: { itemId: string }) {
   const [addingTag, setAddingTag] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
   const [ytHiResFailed, setYtHiResFailed] = useState(false);
+  const noteDraftRef = useRef<string | null>(null);
+  const userNoteRef = useRef<string | undefined>(undefined);
 
-  if (item === null)
+  noteDraftRef.current = noteDraft;
+  if (item) userNoteRef.current = item.userNote;
+  useEffect(() => {
+    return () => {
+      const draft = noteDraftRef.current;
+      if (draft !== null && draft !== (userNoteRef.current ?? "")) {
+        void update({
+          id: itemId as Id<"items">,
+          userNote: draft,
+        });
+      }
+    };
+  }, [itemId, update]);
+
+  if (item === null) {
     return (
       <SafeAreaView style={styles.container}>
         <Header canShare={false} url={undefined} title={undefined} />
@@ -92,6 +108,7 @@ function ItemScreen({ itemId }: { itemId: string }) {
         </Center>
       </SafeAreaView>
     );
+  }
 
   const it = (item ??
     (seed
@@ -127,30 +144,26 @@ function ItemScreen({ itemId }: { itemId: string }) {
   const isYouTube = it.type === "youtube";
   const isInstagram = it.type === "instagram";
   const isNote = it.type === "note";
+  const isGitHub = it.type === "github";
   const ytId = typeof embed.videoId === "string" ? embed.videoId : undefined;
   const ytPoster = ytId
     ? ytHiResFailed
       ? (it.thumbnailUrl ?? `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`)
       : `https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg`
     : it.thumbnailUrl;
-  const doneLabel =
-    it.type === "instagram"
-      ? "I've watched this reel"
-      : isYouTube
-        ? "I've watched this video"
-        : it.type === "article"
-          ? "Mark as read"
-          : "Mark as done";
+  const openUrl = it.url ?? it.fileUrl;
 
   async function submitTag() {
     const name = tagDraft.trim();
-    setTagDraft("");
-    setAddingTag(false);
-    if (name.length >= 2) {
-      try {
-        await addTag({ id: itemId as Id<"items">, name });
-      } catch {}
+    if (!name) {
+      setAddingTag(false);
+      return;
     }
+    try {
+      await addTag({ id: itemId as Id<"items">, name });
+      setTagDraft("");
+      setAddingTag(false);
+    } catch {}
   }
 
   const currentNote = it.userNote ?? "";
@@ -230,7 +243,7 @@ function ItemScreen({ itemId }: { itemId: string }) {
               contentFit="cover"
             />
           </Pressable>
-        ) : it.thumbnailUrl && !isNote ? (
+        ) : it.thumbnailUrl && !isNote && !isGitHub ? (
           <Image
             source={{ uri: it.thumbnailUrl }}
             style={styles.heroImage}
@@ -287,31 +300,15 @@ function ItemScreen({ itemId }: { itemId: string }) {
           </View>
         ) : null}
 
-        {/* Done toggle */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.doneButton,
-            it.isDone && styles.doneButtonActive,
-            pressed && styles.pressed,
-          ]}
-          onPress={() =>
-            void update({ id: itemId as Id<"items">, isDone: !it.isDone })
-          }
-        >
-          <Ionicons
-            name={it.isDone ? "checkmark-circle" : "checkmark-circle-outline"}
-            size={17}
-            color={it.isDone ? colors.done : colors.textMuted}
-          />
-          <Text
-            style={[
-              styles.doneButtonText,
-              it.isDone && styles.doneButtonTextActive,
-            ]}
+        {openUrl ? (
+          <Pressable
+            style={({ pressed }) => [styles.doneButton, pressed && styles.pressed]}
+            onPress={() => void Linking.openURL(openUrl)}
           >
-            {it.isDone ? "Done" : doneLabel}
-          </Text>
-        </Pressable>
+            <Ionicons name="open-outline" size={17} color={colors.textMuted} />
+            <Text style={styles.doneButtonText}>Open original</Text>
+          </Pressable>
+        ) : null}
 
         {/* Tags */}
         <View style={styles.section}>

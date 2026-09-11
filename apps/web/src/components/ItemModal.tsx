@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -35,7 +35,6 @@ type Detail = {
   thumbnailUrl?: string;
   embedJson?: unknown;
   userNote?: string;
-  isDone?: boolean;
   tags?: string[];
   savedAt: number;
 };
@@ -79,7 +78,7 @@ export function ItemModal({
     (localStore, args) => {
       const current = localStore.getQuery(api.items.get, { id: args.id });
       const name = args.name.trim().toLowerCase().slice(0, 30);
-      if (current && name.length >= 2 && !current.tags.includes(name)) {
+      if (current && name.length > 0 && !current.tags.includes(name)) {
         optimisticPatchItem(localStore, args.id, {
           tags: [...current.tags, name],
         });
@@ -108,14 +107,45 @@ export function ItemModal({
   const [tagging, setTagging] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
   const [playEmbed, setPlayEmbed] = useState(false);
+  const titleDraftRef = useRef<string | null>(null);
+  const noteDraftRef = useRef<string | null>(null);
+  const tagDraftRef = useRef("");
+  const taggingRef = useRef(false);
+  const committingTag = useRef(false);
+
+  const saveField = useCallback(
+    (patch: { title?: string; userNote?: string }) => {
+      void update({ id: itemId as Id<"items">, ...patch });
+    },
+    [update, itemId],
+  );
+
+  const flush = useCallback(() => {
+    const title = titleDraftRef.current;
+    const note = noteDraftRef.current;
+    const patch: { title?: string; userNote?: string } = {};
+    if (title !== null) patch.title = title;
+    if (note !== null) patch.userNote = note;
+    if (Object.keys(patch).length > 0) saveField(patch);
+    const name = tagDraftRef.current.trim();
+    if (taggingRef.current && name.length > 0 && !committingTag.current) {
+      committingTag.current = true;
+      void addTag({ id: itemId as Id<"items">, name });
+    }
+  }, [saveField, addTag, itemId]);
+
+  const handleClose = useCallback(() => {
+    flush();
+    onClose();
+  }, [flush, onClose]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") handleClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [handleClose]);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,13 +161,6 @@ export function ItemModal({
       cancelled = true;
     };
   }, [item?.htmlUrl]);
-
-  const saveField = useCallback(
-    (patch: { title?: string; userNote?: string; isDone?: boolean }) => {
-      void update({ id: itemId as Id<"items">, ...patch });
-    },
-    [update, itemId],
-  );
 
   const it: Detail | undefined =
     item ??
@@ -158,19 +181,34 @@ export function ItemModal({
   const isYouTube = it.type === "youtube";
   const isInstagram = it.type === "instagram";
   const isDocument = it.type === "document";
-  const doneLabel =
-    it.type === "instagram"
-      ? "I've watched this reel"
-      : isYouTube
-        ? "I've watched this video"
-        : it.type === "article" || isDocument
-          ? "Mark as read"
-          : "Mark as done";
+  const openUrl = it.url ?? it.fileUrl;
+
+  async function commitTag() {
+    if (committingTag.current) return;
+    const name = tagDraft.trim();
+    if (!name) {
+      setTagging(false);
+      taggingRef.current = false;
+      return;
+    }
+    committingTag.current = true;
+    try {
+      await addTag({ id: itemId as Id<"items">, name });
+      setTagDraft("");
+      tagDraftRef.current = "";
+      setTagging(false);
+      taggingRef.current = false;
+    } catch {
+      /* keep the input so a failed tag isn't lost */
+    } finally {
+      committingTag.current = false;
+    }
+  }
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4 sm:p-8"
-      onClick={onClose}
+      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:p-8"
+      onClick={handleClose}
     >
       <div
         className="relative my-auto flex max-h-[85dvh] w-[min(1400px,94vw)] flex-col overflow-hidden rounded-2xl border border-stone-200 bg-stone-50 shadow-2xl md:flex-row dark:border-[#2a2a31] dark:bg-[#17171b]"
@@ -179,7 +217,7 @@ export function ItemModal({
         <button
           type="button"
           aria-label="Close"
-          onClick={onClose}
+          onClick={handleClose}
           className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-stone-300 bg-white text-xl leading-none text-stone-700 shadow-md transition hover:bg-stone-100 hover:text-stone-900 dark:border-[#3a3a42] dark:bg-[#2a2a31] dark:text-stone-200 dark:hover:bg-[#33333b]"
         >
           ×
@@ -259,7 +297,7 @@ export function ItemModal({
                 )}
               </button>
             )
-          ) : it.thumbnailUrl && it.type !== "note" ? (
+          ) : it.thumbnailUrl && it.type !== "note" && it.type !== "github" ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={it.thumbnailUrl}
@@ -274,7 +312,6 @@ export function ItemModal({
             <DocumentPreview
               markdown={it.contentText}
               embedJson={it.embedJson}
-              variant="reader"
             />
           ) : (
             <div className="prose prose-stone max-w-none dark:prose-invert">
@@ -294,7 +331,10 @@ export function ItemModal({
           <div>
             <input
               value={titleDraft ?? it.title ?? ""}
-              onChange={(e) => setTitleDraft(e.target.value)}
+              onChange={(e) => {
+                titleDraftRef.current = e.target.value;
+                setTitleDraft(e.target.value);
+              }}
               onBlur={() => {
                 if (titleDraft !== null && titleDraft !== it.title)
                   saveField({ title: titleDraft });
@@ -331,16 +371,16 @@ export function ItemModal({
             </div>
           )}
 
-          <button
-            onClick={() => saveField({ isDone: !it.isDone })}
-            className={`w-full rounded-full py-3 text-sm transition ${
-              it.isDone
-                ? "bg-emerald-700/20 text-emerald-500 dark:text-emerald-400"
-                : "bg-stone-200/70 text-stone-700 hover:bg-stone-300/70 dark:bg-[#232329] dark:text-[#c9c9d1] dark:hover:bg-[#2a2a31]"
-            }`}
-          >
-            {it.isDone ? "✓ Done" : doneLabel}
-          </button>
+          {openUrl ? (
+            <a
+              href={openUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block w-full rounded-full bg-stone-200/70 py-3 text-center text-sm text-stone-700 transition hover:bg-stone-300/70 dark:bg-[#232329] dark:text-[#c9c9d1] dark:hover:bg-[#2a2a31]"
+            >
+              Open original ↗
+            </a>
+          ) : null}
 
           <div>
             <p className="mb-2 text-xs font-medium tracking-widest text-stone-400 dark:text-[#6b6b75]">
@@ -354,6 +394,7 @@ export function ItemModal({
                 >
                   {t}
                   <button
+                    type="button"
                     aria-label={`Remove tag ${t}`}
                     onClick={() =>
                       void removeTag({ id: itemId as Id<"items">, name: t })
@@ -368,25 +409,28 @@ export function ItemModal({
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (tagDraft.trim()) {
-                      void addTag({ id: itemId as Id<"items">, name: tagDraft });
-                    }
-                    setTagDraft("");
-                    setTagging(false);
+                    void commitTag();
                   }}
                 >
                   <input
                     autoFocus
                     value={tagDraft}
-                    onChange={(e) => setTagDraft(e.target.value)}
-                    onBlur={() => setTagging(false)}
+                    onChange={(e) => {
+                      tagDraftRef.current = e.target.value;
+                      setTagDraft(e.target.value);
+                    }}
+                    onBlur={() => void commitTag()}
                     placeholder="tag name…"
                     className="w-28 rounded-full border border-stone-300 bg-transparent px-3 py-1 text-xs outline-none dark:border-[#3a3a42]"
                   />
                 </form>
               ) : (
                 <button
-                  onClick={() => setTagging(true)}
+                  type="button"
+                  onClick={() => {
+                    taggingRef.current = true;
+                    setTagging(true);
+                  }}
                   className="rounded-full bg-orange-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-orange-500"
                 >
                   + Add tag
@@ -401,9 +445,12 @@ export function ItemModal({
             </p>
             <textarea
               value={noteDraft ?? it.userNote ?? ""}
-              onChange={(e) => setNoteDraft(e.target.value)}
+              onChange={(e) => {
+                noteDraftRef.current = e.target.value;
+                setNoteDraft(e.target.value);
+              }}
               onBlur={() => {
-                if (noteDraft !== null && noteDraft !== it.userNote)
+                if (noteDraft !== null && noteDraft !== (it.userNote ?? ""))
                   saveField({ userNote: noteDraft });
               }}
               placeholder="Type here to add a note…"

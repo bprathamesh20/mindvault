@@ -110,7 +110,6 @@ export default function ItemPage() {
           <DocumentPreview
             markdown={item.contentText}
             embedJson={item.embedJson}
-            variant="reader"
           />
         </div>
       ) : item.type !== "youtube" ? (

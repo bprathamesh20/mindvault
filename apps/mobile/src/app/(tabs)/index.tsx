@@ -121,14 +121,6 @@ function HomeScreen() {
     await capture(v);
   }
 
-  function surprise() {
-    const ready = (results as Card[]).filter((r) => r.status === "ready");
-    if (ready.length === 0) return;
-    const pick = ready[Math.floor(Math.random() * ready.length)];
-    setCardSeed(pick);
-    router.push({ pathname: "/item/[id]", params: { id: pick.id } });
-  }
-
   const openItem = useCallback(
     (item: Card) => {
       setCardSeed(item);
@@ -158,13 +150,6 @@ function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={styles.wordmark}>MindVault</Text>
-        <Pressable
-          onPress={surprise}
-          hitSlop={10}
-          style={({ pressed }) => [styles.sparkButton, pressed && styles.pressed]}
-        >
-          <Ionicons name="sparkles-outline" size={21} color={colors.textMuted} />
-        </Pressable>
       </View>
 
       <Pressable

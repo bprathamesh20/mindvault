@@ -15,8 +15,8 @@ export const colors = {
   dangerSoft: "#fef2f2",
   done: "#059669",
   doneSoft: "#ecfdf5",
-  noteBg: "#fffbeb",
-  noteBorder: "#fde68a",
+  noteBg: "#eef2ff",
+  noteBorder: "#c7d2fe",
   inverse: "#1c1917",
   inverseText: "#fafaf9",
 } as const;
