@@ -334,6 +334,25 @@ async function extractUploadedDocument(args: {
   return { text, format: format ?? (ext || undefined) };
 }
 
+/**
+ * Cheap metadata for document cards: size in bytes, word count, and for PDFs
+ * a page count from the object table. Counting `/Type /Page` objects misses
+ * pages packed into object streams, so it is a best-effort number.
+ */
+function documentStats(
+  bytes: Uint8Array,
+  extracted: { text: string; format?: string },
+): { bytes: number; words: number; pages?: number } {
+  const words = extracted.text.split(/\s+/).filter(Boolean).length;
+  let pages: number | undefined;
+  if (extracted.format === "pdf") {
+    const head = new TextDecoder("latin1").decode(bytes);
+    const matches = head.match(/\/Type\s*\/Page(?![s\w])/g);
+    if (matches && matches.length > 0) pages = matches.length;
+  }
+  return { bytes: bytes.byteLength, words, ...(pages ? { pages } : {}) };
+}
+
 async function persistThumb(
   ctx: { storage: { store: (blob: Blob) => Promise<Id<"_storage">> } },
   url: string,
@@ -409,12 +428,13 @@ export const enrich = internalAction({
           item.embedJson && typeof item.embedJson === "object"
             ? (item.embedJson as Record<string, unknown>)
             : {};
+        const stats = documentStats(new Uint8Array(buffer), extracted);
         await ctx.runMutation(internal.pipelineDb.persistMeta, {
           itemId: args.itemId,
           title: item.title,
           contentText: extracted.text.slice(0, 50000),
           sourceDomain: extracted.format,
-          embedJson: { ...prior, format: extracted.format },
+          embedJson: { ...prior, format: extracted.format, ...stats },
         });
         return null;
       }

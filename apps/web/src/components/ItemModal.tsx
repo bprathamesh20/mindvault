@@ -312,7 +312,6 @@ export function ItemModal({
             <DocumentPreview
               markdown={it.contentText}
               embedJson={it.embedJson}
-              variant="reader"
             />
           ) : (
             <div className="prose prose-stone max-w-none dark:prose-invert">
