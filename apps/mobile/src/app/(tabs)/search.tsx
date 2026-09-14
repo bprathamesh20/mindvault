@@ -34,7 +34,7 @@ export default function SearchScreen() {
   if (isLoading)
     return (
       <Center>
-        <Text style={styles.muted}>Opening your mind…</Text>
+        <Text style={styles.muted}>Opening your vault…</Text>
       </Center>
     );
   if (!isAuthenticated) return <SignIn />;
@@ -130,7 +130,7 @@ function SearchScreenBody() {
             setTouched(true);
             setQuery(v);
           }}
-          placeholder="Search your mind…"
+          placeholder="Search your vault…"
           placeholderTextColor={colors.textFaint}
           style={styles.input}
           autoFocus
@@ -176,7 +176,7 @@ function SearchScreenBody() {
                 size={34}
                 color={colors.borderStrong}
               />
-              <Text style={styles.emptyTitle}>Ask your mind anything.</Text>
+              <Text style={styles.emptyTitle}>Ask your vault anything.</Text>
               <Text style={styles.emptyBody}>
                 Titles, tags, summaries and{"\n"}your own notes are all searchable.
               </Text>

@@ -27,7 +27,7 @@ export function SearchBar({
   inputRef,
   onOpenPalette,
 }: Props) {
-  const placeholder = mode === "ask" ? "Ask my vault…" : "Search my mind…";
+  const placeholder = mode === "ask" ? "Ask my vault…" : "Search my vault…";
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {

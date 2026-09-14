@@ -384,7 +384,7 @@ export function ItemModal({
 
           <div>
             <p className="mb-2 text-xs font-medium tracking-widest text-stone-400 dark:text-[#6b6b75]">
-              MIND TAGS
+              VAULT TAGS
             </p>
             <div className="flex flex-wrap items-center gap-2">
               {(it.tags ?? []).map((t) => (
@@ -441,7 +441,7 @@ export function ItemModal({
 
           <div>
             <p className="mb-2 text-xs font-medium tracking-widest text-stone-400 dark:text-[#6b6b75]">
-              MIND NOTES
+              VAULT NOTES
             </p>
             <textarea
               value={noteDraft ?? it.userNote ?? ""}

@@ -48,7 +48,7 @@ export default function SignIn() {
           disabled={busy || !passphrase}
           className="mt-4 w-full rounded-full bg-stone-900 px-5 py-3 text-white transition hover:bg-stone-700 disabled:opacity-40 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
         >
-          {busy ? "Opening…" : "Enter your mind"}
+          {busy ? "Opening…" : "Enter your vault"}
         </button>
       </form>
     </main>

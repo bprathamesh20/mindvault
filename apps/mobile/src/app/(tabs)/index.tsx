@@ -37,7 +37,7 @@ export default function Home() {
   if (isLoading)
     return (
       <Center>
-        <Text style={styles.muted}>Opening your mind…</Text>
+        <Text style={styles.muted}>Opening your vault…</Text>
       </Center>
     );
   if (!isAuthenticated) return <SignIn />;
@@ -81,10 +81,10 @@ function HomeScreen() {
           const res = await captureUrl({ url: v });
           message =
             res.outcome === "duplicate"
-              ? "Already in your mind ✓"
+              ? "Already in your vault ✓"
               : res.outcome === "retrying"
                 ? "Retrying…"
-                : "Saved to your mind";
+                : "Saved to your vault";
         } else {
           await captureNote({ text: v });
           message = "Note saved";
@@ -157,7 +157,7 @@ function HomeScreen() {
         onPress={() => router.push("/search")}
       >
         <Ionicons name="search" size={16} color={colors.textFaint} />
-        <Text style={styles.searchPlaceholder}>Search your mind…</Text>
+        <Text style={styles.searchPlaceholder}>Search your vault…</Text>
       </Pressable>
 
       <FlashList
@@ -179,7 +179,7 @@ function HomeScreen() {
           ) : (
             <Center style={styles.emptyWrap}>
               <Ionicons name="sparkles-outline" size={34} color={colors.borderStrong} />
-              <Text style={styles.emptyTitle}>Your mind is empty.</Text>
+              <Text style={styles.emptyTitle}>Your vault is empty.</Text>
               <Text style={styles.emptyBody}>
                 Tap ＋ to save a link,{"\n"}or share one from any app.
               </Text>
@@ -259,7 +259,7 @@ function HomeScreen() {
                 {saving ? (
                   <ActivityIndicator size="small" color={colors.inverseText} />
                 ) : (
-                  <Text style={styles.sheetSaveText}>Save to my mind</Text>
+                  <Text style={styles.sheetSaveText}>Save to my vault</Text>
                 )}
               </Pressable>
             </View>

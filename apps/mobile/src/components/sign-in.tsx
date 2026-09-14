@@ -76,7 +76,7 @@ export function SignIn() {
         {busy ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.buttonText}>Enter your mind</Text>
+          <Text style={styles.buttonText}>Enter your vault</Text>
         )}
       </Pressable>
     </KeyboardAvoidingView>

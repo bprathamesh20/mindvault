@@ -19,7 +19,18 @@ async function requireUserIdentity(ctx: {
 }
 
 export const askVault = action({
-  args: { q: v.string() },
+  args: {
+    q: v.string(),
+    model: v.optional(v.string()),
+    history: v.optional(
+      v.array(
+        v.object({
+          role: v.union(v.literal("user"), v.literal("assistant")),
+          content: v.string(),
+        }),
+      ),
+    ),
+  },
   returns: v.object({
     answer: v.string(),
     sources: v.array(cardValidator),
@@ -58,6 +69,15 @@ export const askVault = action({
       .join("\n\n")
       .slice(0, 8000);
 
+    const model =
+      args.model && args.model.trim().length > 0
+        ? args.model.trim().slice(0, 120)
+        : (process.env.ASK_MODEL ?? ASK_MODEL);
+
+    const historyMessages = (args.history ?? [])
+      .slice(-12)
+      .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }));
+
     let chatRes: Response;
     try {
       chatRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -67,7 +87,7 @@ export const askVault = action({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: process.env.ASK_MODEL ?? ASK_MODEL,
+          model,
           temperature: 0.3,
           max_tokens: 2500,
           reasoning: { effort: "low" },
@@ -77,6 +97,7 @@ export const askVault = action({
               content:
                 "You answer questions about the user's private vault. Use only the numbered sources. If they don't contain the answer, say so. Be concise. Mention source titles when you cite them. Never invent memories.",
             },
+            ...historyMessages,
             {
               role: "user",
               content: `Question: ${q}\n\nSources:\n${context}`,
