@@ -175,7 +175,7 @@ export default function Grid({
       ) : cards.length === 0 ? (
         <div className="py-24 text-center">
           <p className="font-serif text-2xl italic text-stone-400 dark:text-[#6b6b75]">
-            {filterActive ? "Nothing here yet." : "Your mind is empty."}
+            {filterActive ? "Nothing here yet." : "Your vault is empty."}
           </p>
         </div>
       ) : (

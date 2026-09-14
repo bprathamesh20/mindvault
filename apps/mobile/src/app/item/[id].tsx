@@ -312,7 +312,7 @@ function ItemScreen({ itemId }: { itemId: string }) {
 
         {/* Tags */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabelCaps}>MIND TAGS</Text>
+          <Text style={styles.sectionLabelCaps}>VAULT TAGS</Text>
           <View style={styles.tagRow}>
             {(it.tags ?? []).map((t) => (
               <View key={t} style={styles.chip}>
@@ -358,7 +358,7 @@ function ItemScreen({ itemId }: { itemId: string }) {
 
         {/* Notes */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabelCaps}>MIND NOTES</Text>
+          <Text style={styles.sectionLabelCaps}>VAULT NOTES</Text>
           <TextInput
             value={noteDraft ?? it.userNote ?? ""}
             onChangeText={setNoteDraft}

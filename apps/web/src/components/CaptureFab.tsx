@@ -50,10 +50,10 @@ export function CaptureFab({
         const res = await captureUrl({ url: v });
         flash(
           res.outcome === "duplicate"
-            ? "Already in your mind"
+            ? "Already in your vault"
             : res.outcome === "retrying"
               ? "Retrying…"
-              : "Saved to your mind",
+              : "Saved to your vault",
         );
       } else {
         await captureNote({ text: v });
@@ -173,7 +173,7 @@ export function CaptureFab({
                 disabled={!draft.trim() || busy}
                 className="rounded-full bg-stone-900 px-5 py-2.5 text-sm font-medium text-stone-100 transition hover:bg-stone-700 disabled:opacity-40 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
               >
-                {busy ? "Saving…" : "Save to my mind"}
+                {busy ? "Saving…" : "Save to my vault"}
               </button>
             </div>
           </div>

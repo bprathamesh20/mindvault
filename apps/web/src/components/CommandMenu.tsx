@@ -82,9 +82,9 @@ export function CommandMenu({
       search: {
         id: "search",
         badge: "Search",
-        placeholder: "Search my mind…",
+        placeholder: "Search my vault…",
         empty: "Type what you're looking for, then press ↵",
-        label: (q) => `Search my mind for “${q}”`,
+        label: (q) => `Search my vault for “${q}”`,
         run: (q) => close(() => actions.search(q)),
       },
     };
@@ -118,7 +118,7 @@ export function CommandMenu({
       list.push(
         {
           id: "run-search",
-          label: `Search my mind for “${q}”`,
+          label: `Search my vault for “${q}”`,
           group: "Find",
           scope: "search",
           run: close(() => actions.search(q)),
@@ -149,7 +149,7 @@ export function CommandMenu({
       },
       {
         id: "search",
-        label: "Search my mind",
+        label: "Search my vault",
         group: "Find",
         keywords: "search find query look up",
         scope: "search",
@@ -188,7 +188,7 @@ export function CommandMenu({
       },
       {
         id: "sign-out",
-        label: "Lock my mind — sign out",
+        label: "Lock my vault — sign out",
         group: "Account",
         keywords: "signout logout lock leave",
         run: close(actions.signOut),
@@ -316,7 +316,7 @@ export function CommandMenu({
               setActive(0);
             }}
             placeholder={
-              scope ? scope.placeholder : "Type a command, or search your mind…"
+              scope ? scope.placeholder : "Type a command, or search your vault…"
             }
             aria-label="Command menu"
             className="w-full bg-transparent py-4 font-serif text-lg italic outline-none placeholder:text-stone-400 dark:placeholder:text-[#55555e]"

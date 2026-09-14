@@ -249,7 +249,7 @@ export default function Home() {
           <section className="mt-10">
             {askBusy ? (
               <p className="font-serif text-2xl italic text-stone-400 dark:text-[#6b6b75]">
-                Looking through your mind…
+                Looking through your vault…
               </p>
             ) : (
               <>
@@ -270,7 +270,7 @@ export default function Home() {
           <section className="mt-10">
             {searchPending ? (
               <p className="font-serif text-2xl italic text-stone-400 dark:text-[#6b6b75]">
-                Looking through your mind…
+                Looking through your vault…
               </p>
             ) : searchEmpty ? (
               <div className="py-24 text-center">

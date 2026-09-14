@@ -50,7 +50,7 @@ export default function ItemPage() {
         href="/"
         className="text-sm text-stone-400 transition hover:text-stone-600 dark:hover:text-stone-300"
       >
-        ← Back to your mind
+        ← Back to your vault
       </Link>
 
       <h1 className="mt-8 font-serif text-3xl leading-tight tracking-tight">
