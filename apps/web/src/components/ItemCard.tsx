@@ -18,12 +18,14 @@ import {
   Play,
   Presentation,
   Repeat2,
+  ShoppingBag,
   Star,
   StickyNote,
   TriangleAlert,
   Users,
 } from "lucide-react";
 import type { Card } from "./types";
+import { formatPrice, priceLabel, productInfo } from "../lib/product";
 
 /* ------------------------------------------------------------------ */
 /* Shell + shared bits                                                 */
@@ -257,6 +259,7 @@ const YOUTUBE: BadgeSpec = { label: "YouTube", Icon: YTIcon, chip: "bg-[#ff0033]
 const IMAGE: BadgeSpec = { label: "Image", Icon: ImageIcon, chip: "bg-emerald-500 text-white" };
 const NOTE: BadgeSpec = { label: "Note", Icon: StickyNote, chip: "bg-violet-500 text-white" };
 const LINK: BadgeSpec = { label: "Link", Icon: Link2, chip: "bg-sky-500 text-white" };
+const PRODUCT: BadgeSpec = { label: "Product", Icon: ShoppingBag, chip: "bg-emerald-600 text-white" };
 const PENDING: BadgeSpec = { label: "Saving…", Icon: (p) => <LoaderCircle {...p} className="animate-spin" />, chip: "bg-stone-200 text-stone-500 dark:bg-white/[0.08] dark:text-[#b4b4bf]" };
 const FAILED: BadgeSpec = { label: "Couldn't save", Icon: TriangleAlert, chip: "bg-amber-500 text-white" };
 
@@ -342,6 +345,8 @@ export function ItemCard({
       return <DocumentCard item={item} onOpen={onOpen} />;
     case "github":
       return <GitHubCard item={item} onOpen={onOpen} />;
+    case "product":
+      return <ProductCard item={item} onOpen={onOpen} />;
     case "article":
     default:
       return <ArticleCard item={item} onOpen={onOpen} />;
@@ -577,6 +582,83 @@ function LinkCard({ item, onOpen }: Props) {
         ) : null}
         <Tags tags={item.tags ?? []} />
         <Footer left={item.sourceDomain} savedAt={item.savedAt} />
+      </div>
+    </Shell>
+  );
+}
+
+function ProductCard({ item, onOpen }: Props) {
+  const open = onOpen ? () => onOpen(item) : undefined;
+  const price = productInfo(item.embedJson);
+  const brand = embedString(item.embedJson, "brand") ?? item.author;
+  const availability = embedString(item.embedJson, "availability");
+  const siteName = embedString(item.embedJson, "siteName");
+  const caption = item.summary ?? item.preview;
+  const size = saneThumb(item.thumbWidth, item.thumbHeight);
+  const meta = [brand, availability].filter(Boolean).join(" · ");
+  return (
+    <Shell item={item} onOpen={onOpen}>
+      {item.thumbnailUrl ? (
+        <div className="relative -mb-1 overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={item.thumbnailUrl}
+            alt={item.title ?? ""}
+            width={size?.w}
+            height={size?.h}
+            loading="lazy"
+            decoding="async"
+            className="max-h-[360px] w-full object-cover dark:brightness-[0.9] dark:saturate-[0.95]"
+            style={size ? { aspectRatio: `${size.w} / ${size.h}` } : { aspectRatio: "4 / 5" }}
+          />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[46%] bg-gradient-to-t from-(--card) from-[4%] via-(--card)/70 via-[40%] to-transparent dark:h-[58%] dark:from-[6%] dark:via-[42%] transition-colors duration-200" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/35 to-transparent" />
+          {price ? (
+            <span className="absolute right-3 top-3 inline-flex items-baseline gap-1.5 rounded-lg bg-stone-950/85 px-2.5 py-1.5 text-[13px] font-semibold tracking-tight text-white shadow-sm ring-1 ring-white/15 backdrop-blur-md">
+              {price.compareAtPrice !== undefined &&
+              price.price !== undefined &&
+              price.compareAtPrice > price.price ? (
+                <span className="text-[11px] font-normal text-white/50 line-through">
+                  {formatPrice(price.compareAtPrice, price.currency)}
+                </span>
+              ) : null}
+              {priceLabel(price)}
+            </span>
+          ) : null}
+          <div className="absolute left-4 bottom-2">
+            <TypeBadge spec={PRODUCT} overlay />
+          </div>
+          <div className="absolute right-2.5 bottom-2">
+            <Kebab overlay onClick={(e) => { e.stopPropagation(); open?.(); }} />
+          </div>
+        </div>
+      ) : (
+        <Header spec={PRODUCT} onKebab={open} />
+      )}
+      <div className={item.thumbnailUrl ? "px-4 pb-4 pt-2" : "px-4 pb-4 pt-3"}>
+        {item.title ? <h2 className={`${TITLE} line-clamp-2`}>{item.title}</h2> : null}
+        {meta ? (
+          <p className={`mt-1 flex items-center gap-1.5 ${META}`}>
+            <span className="truncate">{meta}</span>
+          </p>
+        ) : null}
+        {!meta && caption ? (
+          <p className={`${BODY} mt-1.5 line-clamp-2`}>{caption}</p>
+        ) : null}
+        {!item.thumbnailUrl && price ? (
+          <p className="mt-1.5 flex items-baseline gap-2 text-[15px] font-semibold text-stone-900 dark:text-[#f1f1f4]">
+            {price.compareAtPrice !== undefined &&
+            price.price !== undefined &&
+            price.compareAtPrice > price.price ? (
+              <span className="text-[12px] font-normal text-stone-400 line-through dark:text-[#6e6e7a]">
+                {formatPrice(price.compareAtPrice, price.currency)}
+              </span>
+            ) : null}
+            {priceLabel(price)}
+          </p>
+        ) : null}
+        <Tags tags={item.tags ?? []} />
+        <Footer left={siteName ?? item.sourceDomain} savedAt={item.savedAt} />
       </div>
     </Shell>
   );

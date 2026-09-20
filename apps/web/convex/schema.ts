@@ -17,6 +17,7 @@ export default defineSchema({
       v.literal("link"),
       v.literal("document"),
       v.literal("github"),
+      v.literal("product"),
     ),
     url: v.optional(v.string()),
     title: v.optional(v.string()),

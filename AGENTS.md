@@ -121,6 +121,11 @@ Re-pasting a URL: `duplicate` if ready, `retrying` (reset+re-enrich) if failed.
   (`- username on <date>: "caption"`).
 - **Articles**: fetch → cheerio og-tags + Readability(`linkedom`) → fallback
   `r.jina.ai/{url}` (free reader). Store reader HTML in File Storage when >20KB.
+- **Products**: any page whose HTML says product (`og:type=product`,
+  `product:price:*` meta, a JSON-LD `Product` node, or microdata) is
+  reclassified at enrich time — `persistMeta` accepts a `type` override.
+  Price/currency/brand/availability land in `embedJson` (`provider:"product"`);
+  cards render a price pill from it.
 - Thumbnails: skip silently on failure — extraction must never fail because of
   a missing image.
 

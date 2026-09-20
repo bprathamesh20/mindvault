@@ -23,7 +23,12 @@ import { api } from "../../lib/backend";
 import type { Id } from "../../lib/backend";
 import type { Detail } from "../../lib/types";
 import { colors, fonts, radius } from "../../lib/theme";
-import { timeAgoLong } from "../../lib/format";
+import {
+  timeAgoLong,
+  formatPrice,
+  priceLabel,
+  productInfo,
+} from "../../lib/format";
 
 export default function ItemPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -145,6 +150,8 @@ function ItemScreen({ itemId }: { itemId: string }) {
   const isInstagram = it.type === "instagram";
   const isNote = it.type === "note";
   const isGitHub = it.type === "github";
+  const product =
+    it.type === "product" ? productInfo(it.embedJson) : undefined;
   const ytId = typeof embed.videoId === "string" ? embed.videoId : undefined;
   const ytPoster = ytId
     ? ytHiResFailed
@@ -289,6 +296,24 @@ function ItemScreen({ itemId }: { itemId: string }) {
           {timeAgoLong(it.savedAt)}
           {it.sourceDomain ? `  ·  ${it.sourceDomain}` : ""}
         </Text>
+
+        {product ? (
+          <View style={styles.priceRow}>
+            <Text style={styles.priceBig}>{priceLabel(product)}</Text>
+            {product.compareAtPrice !== undefined &&
+            product.price !== undefined &&
+            product.compareAtPrice > product.price ? (
+              <Text style={styles.priceWas}>
+                {formatPrice(product.compareAtPrice, product.currency)}
+              </Text>
+            ) : null}
+            {product.availability ? (
+              <Text style={styles.priceAvailability}>
+                {product.availability}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Summary */}
         {it.summary ? (
@@ -552,6 +577,19 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   metaLine: { fontSize: 12.5, color: colors.textFaint, marginTop: -8 },
+  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 10 },
+  priceBig: {
+    fontSize: 21,
+    fontWeight: "700",
+    color: colors.text,
+    letterSpacing: -0.3,
+  },
+  priceWas: {
+    fontSize: 13,
+    color: colors.textFaint,
+    textDecorationLine: "line-through",
+  },
+  priceAvailability: { fontSize: 12.5, color: colors.textMuted },
   section: { gap: 8, marginTop: 2 },
   sectionLabel: {
     fontFamily: fonts.serif,

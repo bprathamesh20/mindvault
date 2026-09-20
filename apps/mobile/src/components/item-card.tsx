@@ -5,7 +5,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Card } from "../lib/types";
 import { colors, fonts, radius } from "../lib/theme";
-import { timeAgo, domainOf } from "../lib/format";
+import {
+  timeAgo,
+  domainOf,
+  formatPrice,
+  priceLabel,
+  productInfo,
+  type ProductInfo,
+} from "../lib/format";
 
 /* ------------------------------------------------------------------ */
 /* Badge specs — one per card type, mirrors apps/web ItemCard          */
@@ -25,6 +32,7 @@ const YOUTUBE: BadgeSpec = { label: "YouTube", icon: "logo-youtube", bg: "#ff003
 const IMAGE: BadgeSpec = { label: "Image", icon: "image", bg: "#10b981" };
 const NOTE: BadgeSpec = { label: "Note", icon: "document-text", bg: "#8b5cf6" };
 const LINK: BadgeSpec = { label: "Link", icon: "link", bg: "#0ea5e9" };
+const PRODUCT: BadgeSpec = { label: "Product", icon: "pricetag", bg: "#059669" };
 const PENDING: BadgeSpec = { label: "Saving…", icon: "sync-outline", bg: colors.surfaceAlt, fg: colors.textMuted };
 const FAILED: BadgeSpec = { label: "Couldn't save", icon: "warning", bg: "#f59e0b" };
 const GITHUB_BG = "#24292f";
@@ -149,11 +157,13 @@ function Media({
   spec,
   play,
   cornerLabel,
+  price,
 }: {
   item: Card;
   spec: BadgeSpec;
   play?: boolean;
   cornerLabel?: string;
+  price?: ProductInfo;
 }) {
   const aspect =
     item.thumbWidth && item.thumbHeight ? item.thumbWidth / item.thumbHeight : 16 / 10;
@@ -190,7 +200,19 @@ function Media({
         <Badge spec={spec} overlay />
       </View>
       {cornerLabel ? <Text style={styles.cornerLabel}>{cornerLabel}</Text> : null}
-      <View style={styles.mediaKebab}>
+      {price ? (
+        <View style={styles.pricePill}>
+          {price.compareAtPrice !== undefined &&
+          price.price !== undefined &&
+          price.compareAtPrice > price.price ? (
+            <Text style={styles.priceCompare}>
+              {formatPrice(price.compareAtPrice, price.currency)}
+            </Text>
+          ) : null}
+          <Text style={styles.priceText}>{priceLabel(price)}</Text>
+        </View>
+      ) : null}
+      <View style={[styles.mediaKebab, price ? styles.mediaKebabBottom : null]}>
         <Kebab overlay />
       </View>
     </View>
@@ -330,6 +352,8 @@ export const ItemCard = memo(function ItemCard({
       return <DocumentCard item={item} onPress={onPress} />;
     case "github":
       return <GitHubCard item={item} onPress={onPress} />;
+    case "product":
+      return <ProductCard item={item} onPress={onPress} />;
     case "article":
     default:
       return <ArticleCard item={item} onPress={onPress} />;
@@ -524,6 +548,46 @@ function ImageCard({ item, onPress }: Props) {
         ) : null}
         <Tags tags={item.tags} />
         <Footer left={item.sourceDomain} savedAt={item.savedAt} />
+      </View>
+    </Shell>
+  );
+}
+
+function ProductCard({ item, onPress }: Props) {
+  const price = productInfo(item.embedJson);
+  const brand = embedString(item.embedJson, "brand") ?? item.author;
+  const availability = embedString(item.embedJson, "availability");
+  const siteName = embedString(item.embedJson, "siteName");
+  const caption = item.summary ?? item.preview;
+  const meta = [brand, availability].filter(Boolean).join(" · ");
+  return (
+    <Shell item={item} onPress={onPress}>
+      {item.thumbnailUrl ? (
+        <Media item={item} spec={PRODUCT} price={price} />
+      ) : (
+        <Header spec={PRODUCT} />
+      )}
+      <View style={[styles.body, item.thumbnailUrl && styles.bodyTight]}>
+        {item.title ? (
+          <Text style={styles.title} numberOfLines={2}>
+            {item.title}
+          </Text>
+        ) : null}
+        {meta ? (
+          <Text style={styles.meta} numberOfLines={1}>
+            {meta}
+          </Text>
+        ) : null}
+        {!meta && caption ? (
+          <Text style={styles.bodyText} numberOfLines={2}>
+            {caption}
+          </Text>
+        ) : null}
+        {!item.thumbnailUrl && price ? (
+          <Text style={styles.priceInline}>{priceLabel(price)}</Text>
+        ) : null}
+        <Tags tags={item.tags} />
+        <Footer left={siteName ?? item.sourceDomain} savedAt={item.savedAt} />
       </View>
     </Shell>
   );
@@ -1004,6 +1068,27 @@ const styles = StyleSheet.create({
   mediaVignette: { position: "absolute", left: 0, right: 0, top: 0, height: 56 },
   mediaBadge: { position: "absolute", left: 12, bottom: 6 },
   mediaKebab: { position: "absolute", right: 8, top: 8 },
+  mediaKebabBottom: { top: undefined, bottom: 8 },
+  pricePill: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 5,
+    borderRadius: 8,
+    backgroundColor: "rgba(12,10,9,0.85)",
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  priceText: { fontSize: 13, fontWeight: "700", color: "#fff", letterSpacing: -0.1 },
+  priceCompare: {
+    fontSize: 10.5,
+    fontWeight: "400",
+    color: "rgba(255,255,255,0.5)",
+    textDecorationLine: "line-through",
+  },
+  priceInline: { fontSize: 15, fontWeight: "700", color: colors.text },
   cornerLabel: {
     position: "absolute",
     right: 12,

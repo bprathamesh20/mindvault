@@ -2,7 +2,12 @@ import { v } from "convex/values";
 import { internalQuery, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import schema from "./schema";
-import { detectType, domainOf, titleFromFilename } from "./shared";
+import {
+  detectType,
+  domainOf,
+  itemTypeValidator,
+  titleFromFilename,
+} from "./shared";
 
 export const captureInternal = internalMutation({
   args: { url: v.string() },
@@ -93,13 +98,21 @@ export const persistMeta = internalMutation({
     embedJson: v.optional(v.any()),
     sourceDomain: v.optional(v.string()),
     skipAi: v.optional(v.boolean()),
+    // Extraction can reclassify an item (e.g. article → product) once the
+    // page's own metadata says what it actually is.
+    type: v.optional(itemTypeValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const item = await ctx.db.get(args.itemId);
     if (!item) return null;
-    const { itemId: _itemId, skipAi, ...patch } = args;
-    await ctx.db.patch(args.itemId, { ...patch, status: "ready" });
+    const { itemId: _itemId, skipAi, type, ...patch } = args;
+    await ctx.db.patch(args.itemId, {
+      ...patch,
+      // type is required — never let an undefined arg unset it.
+      ...(type !== undefined ? { type } : {}),
+      status: "ready",
+    });
     if (!skipAi) {
       await ctx.scheduler.runAfter(0, internal.ai.enrichAi, {
         itemId: args.itemId,

@@ -20,6 +20,8 @@ const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 type Extracted = {
+  // Set when extraction reclassifies the item (e.g. article → product).
+  type?: "product";
   title?: string;
   author?: string;
   text?: string;
@@ -278,6 +280,28 @@ async function extractArticle(url: URL): Promise<Extracted> {
       // readability can choke on odd DOMs — og tags still save the card
     }
 
+    // Product pages reclassify the item: card shows price + buy link instead
+    // of reader prose, so we don't bother storing reader HTML for them.
+    const product =
+      parseProduct($) ?? (await extractShopifyProduct(url, html));
+    if (product) {
+      const { name, image, description, ...info } = product;
+      return {
+        type: "product",
+        title: stripSiteSuffix(ogTitle ?? name ?? parsedTitle, ogSiteName),
+        author: product.brand,
+        text: description ?? ogDesc ?? textContent,
+        thumbnailUrl:
+          (ogImage ? absolute(ogImage, url.href) : undefined) ??
+          (image ? absolute(image, url.href) : undefined),
+        embedJson: {
+          provider: "product",
+          ...(ogSiteName ? { siteName: ogSiteName } : {}),
+          ...info,
+        },
+      };
+    }
+
     return {
       title: parsedTitle ?? ogTitle,
       author: byline,
@@ -447,6 +471,381 @@ async function extractGitHub(url: URL): Promise<Extracted> {
       ...(section ? { path: parts.slice(2).join("/") } : {}),
     },
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Products — og:product meta, JSON-LD Product nodes, microdata        */
+/* ------------------------------------------------------------------ */
+
+type ProductInfo = {
+  name?: string;
+  price?: number;
+  priceText?: string;
+  currency?: string;
+  compareAtPrice?: number;
+  brand?: string;
+  availability?: string;
+  image?: string;
+  description?: string;
+};
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  $: "USD",
+  "₹": "INR",
+  "€": "EUR",
+  "£": "GBP",
+  "¥": "JPY",
+  "₩": "KRW",
+};
+
+function cleanCurrency(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const c = raw.trim();
+  if (/^[A-Za-z]{3}$/.test(c)) return c.toUpperCase();
+  return CURRENCY_SYMBOLS[c];
+}
+
+function parsePrice(raw: unknown): number | undefined {
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : undefined;
+  if (typeof raw !== "string") return undefined;
+  let s = raw.trim().replace(/[^\d.,]/g, "");
+  if (!s) return undefined;
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  if (lastComma >= 0 && lastDot >= 0) {
+    // Both separators: the rightmost one is the decimal point.
+    s =
+      lastComma > lastDot
+        ? s.replace(/\./g, "").replace(",", ".")
+        : s.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    // Comma only: three digits after it means thousands ("1,299"), else decimal.
+    s =
+      s.length - lastComma - 1 === 3
+        ? s.replace(/,/g, "")
+        : s.replace(",", ".");
+  }
+  const n = Number.parseFloat(s);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
+const AVAILABILITY_LABELS: Record<string, string> = {
+  instock: "In stock",
+  outofstock: "Out of stock",
+  soldout: "Sold out",
+  preorder: "Pre-order",
+  presale: "Pre-sale",
+  limitedavailability: "Low stock",
+  backorder: "Backorder",
+  discontinued: "Discontinued",
+  instoreonly: "In store only",
+  onlineonly: "Online only",
+};
+
+function availabilityLabel(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  // JSON-LD gives "https://schema.org/InStock"; og meta gives "in stock".
+  const key = raw.split("/").pop() ?? raw;
+  return AVAILABILITY_LABELS[key.toLowerCase().replace(/[\s_-]/g, "")];
+}
+
+function ldType(node: Record<string, unknown>): string[] {
+  const t = node["@type"];
+  return (Array.isArray(t) ? t : [t]).filter(
+    (x): x is string => typeof x === "string",
+  );
+}
+
+type LdProduct = {
+  product?: Record<string, unknown>;
+  group?: Record<string, unknown>;
+};
+
+// Walks JSON-LD trees — arrays, @graph, hasVariant — collecting the first
+// Product node and the first ProductGroup node it sees. ProductGroup wraps
+// variants (Shopify); the group's name is cleaner than a variant's.
+function collectLdProducts(node: unknown, out: LdProduct): void {
+  if (Array.isArray(node)) {
+    for (const n of node) {
+      collectLdProducts(n, out);
+      if (out.product) return;
+    }
+    return;
+  }
+  if (!node || typeof node !== "object") return;
+  const obj = node as Record<string, unknown>;
+  const types = ldType(obj).map((t) => t.toLowerCase());
+  if (!out.product && types.includes("product")) out.product = obj;
+  if (!out.group && types.includes("productgroup")) out.group = obj;
+  if (out.product) return;
+  for (const key of ["@graph", "hasVariant", "itemListElement", "mainEntity"]) {
+    if (key in obj) collectLdProducts(obj[key], out);
+  }
+}
+
+// Some stores append junk after the JSON-LD object, which breaks JSON.parse —
+// extract just the first balanced {…} (string- and escape-aware).
+function firstJsonObject(text: string): unknown {
+  const start = text.indexOf("{");
+  if (start < 0) throw new Error("no object");
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) return JSON.parse(text.slice(start, i + 1));
+    }
+  }
+  throw new Error("unbalanced");
+}
+
+// JSON-LD strings sometimes carry literal HTML entities ("Men&#39;s").
+function decodeEntities(s: string | undefined): string | undefined {
+  if (!s || !s.includes("&")) return s;
+  const { document } = parseHTML(`<span>${s}</span>`);
+  return document.querySelector("span")?.textContent ?? s;
+}
+
+function ldImage(node: Record<string, unknown>): string | undefined {
+  const img = node.image;
+  const first = Array.isArray(img) ? img[0] : img;
+  if (typeof first === "string") return first;
+  if (first && typeof first === "object") {
+    const url = (first as Record<string, unknown>).url;
+    if (typeof url === "string") return url;
+  }
+  return undefined;
+}
+
+function ldBrand(node: Record<string, unknown>): string | undefined {
+  const brand = node.brand;
+  if (typeof brand === "string") return brand;
+  if (brand && typeof brand === "object") {
+    const name = (brand as Record<string, unknown>).name;
+    if (typeof name === "string") return name;
+  }
+  return undefined;
+}
+
+function offerFields(node: Record<string, unknown>): {
+  price?: number;
+  priceText?: string;
+  currency?: string;
+  availability?: string;
+} {
+  let offers = node.offers;
+  if (Array.isArray(offers)) offers = offers[0];
+  if (!offers || typeof offers !== "object") return {};
+  const o = offers as Record<string, unknown>;
+  const rawPrice = o.price ?? o.lowPrice;
+  return {
+    price: parsePrice(rawPrice),
+    priceText:
+      parsePrice(rawPrice) === undefined && typeof rawPrice === "string"
+        ? rawPrice
+        : undefined,
+    currency: cleanCurrency(o.priceCurrency),
+    availability: availabilityLabel(o.availability),
+  };
+}
+
+/** Pull product metadata out of a product page, or undefined when the page
+ * carries no product signals (og:type, JSON-LD Product, price meta). */
+function parseProduct(
+  $: ReturnType<typeof cheerio.load>,
+): ProductInfo | undefined {
+  const meta = (name: string) =>
+    $(`meta[property="${name}"], meta[name="${name}"]`).attr("content") ??
+    undefined;
+
+  const ogType = meta("og:type")?.toLowerCase() ?? "";
+
+  const ld: LdProduct = {};
+  $("script[type^='application/ld+json']").each((_, el) => {
+    if (ld.product) return;
+    try {
+      collectLdProducts(firstJsonObject($(el).contents().text()), ld);
+    } catch {
+      // malformed JSON-LD — keep looking
+    }
+  });
+  const node = ld.product ?? ld.group;
+
+  const isProduct =
+    ogType === "product" ||
+    ogType.startsWith("product.") ||
+    node !== undefined ||
+    meta("product:price:amount") !== undefined;
+  if (!isProduct) return undefined;
+
+  const offer = node ? offerFields(node) : {};
+  const microPrice =
+    $('[itemprop="price"]').first().attr("content") ??
+    $('[itemprop="price"]').first().text().trim();
+
+  const price =
+    offer.price ??
+    parsePrice(meta("product:price:amount")) ??
+    parsePrice(meta("og:price:amount")) ??
+    parsePrice(meta("twitter:data1")) ??
+    parsePrice(microPrice);
+  const priceText =
+    price === undefined
+      ? (meta("product:price:amount") ??
+        meta("og:price:amount") ??
+        offer.priceText)
+      : undefined;
+
+  // A variant's name is "Shoe - Black/42"; the group's is just "Shoe".
+  const nameSource = ld.group ?? ld.product;
+  const name =
+    nameSource && typeof nameSource.name === "string"
+      ? decodeEntities(nameSource.name)
+      : undefined;
+  const descSource = ld.group ?? ld.product;
+
+  return {
+    name,
+    price,
+    priceText,
+    currency:
+      offer.currency ??
+      cleanCurrency(meta("product:price:currency")) ??
+      cleanCurrency(meta("og:price:currency")) ??
+      cleanCurrency(
+        $('[itemprop="priceCurrency"]').first().attr("content"),
+      ),
+    compareAtPrice:
+      parsePrice(meta("product:original_price:amount")) ??
+      parsePrice(meta("product:pretax_price:amount")),
+    brand:
+      (node ? decodeEntities(ldBrand(node)) : undefined) ??
+      meta("og:brand") ??
+      meta("product:brand"),
+    availability:
+      offer.availability ?? availabilityLabel(meta("product:availability")),
+    image: node ? ldImage(node) : undefined,
+    description:
+      descSource && typeof descSource.description === "string"
+        ? decodeEntities(descSource.description)
+        : undefined,
+  };
+}
+
+/** Shopify storefronts expose /products/{handle}.js — this reaches
+ * JS-rendered stores whose HTML carries no og/JSON-LD product markup. */
+async function extractShopifyProduct(
+  url: URL,
+  html: string,
+): Promise<ProductInfo | undefined> {
+  const handle = url.pathname.match(/\/products\/([a-z0-9-]+)/i)?.[1];
+  if (!handle) return undefined;
+  if (
+    !/cdn\.shopify\.com|myshopify\.com|Shopify\.theme|window\.Shopify\b/.test(
+      html,
+    )
+  ) {
+    return undefined;
+  }
+  let p: Record<string, unknown> | undefined;
+  // Some stores only serve the endpoint under the locale prefix
+  // (/en-us/products/x.js), others at the root — try both.
+  for (const endpoint of [
+    `${url.origin}/products/${handle}.js`,
+    `${url.origin}${url.pathname}.js`,
+  ]) {
+    try {
+      const res = await fetch(endpoint, { headers: { "User-Agent": UA } });
+      if (!res.ok) continue;
+      const data = (await res.json()) as Record<string, unknown>;
+      if (typeof data.title === "string") {
+        p = data;
+        break;
+      }
+    } catch {
+      continue;
+    }
+  }
+  if (!p) return undefined;
+
+  // ?variant= pins the price to the exact variant the user saved.
+  const variants = Array.isArray(p.variants)
+    ? (p.variants as Array<Record<string, unknown>>)
+    : [];
+  const variantId = url.searchParams.get("variant");
+  const variant = variantId
+    ? variants.find((vv) => String(vv.id) === variantId)
+    : undefined;
+
+  // The .js endpoint reports prices in minor units (cents).
+  const cents = (value: unknown) =>
+    typeof value === "number" ? value / 100 : undefined;
+  const price = cents(variant?.price) ?? cents(p.price);
+  const compareAt =
+    cents(variant?.compare_at_price) ?? cents(p.compare_at_price);
+  const available =
+    typeof variant?.available === "boolean"
+      ? variant.available
+      : typeof p.available === "boolean"
+        ? p.available
+        : undefined;
+  const currency =
+    html.match(/Shopify\.currency\s*=\s*\{[^}]*"active"\s*:\s*"([A-Z]{3})"/)?.[1] ??
+    html.match(/"currencyCode"\s*:\s*"([A-Z]{3})"/)?.[1] ??
+    html.match(/currency\s*=\s*'([A-Z]{3})'/)?.[1];
+
+  const description =
+    typeof p.description === "string" && p.description.length > 0
+      ? cheerio
+          .load(`<div>${p.description}</div>`)("div")
+          .text()
+          .replace(/\s+/g, " ")
+          .trim()
+      : undefined;
+
+  return {
+    name: typeof p.title === "string" ? p.title : undefined,
+    price,
+    currency,
+    compareAtPrice:
+      compareAt !== undefined && price !== undefined && compareAt > price
+        ? compareAt
+        : undefined,
+    brand: typeof p.vendor === "string" ? p.vendor : undefined,
+    availability:
+      available === true
+        ? "In stock"
+        : available === false
+          ? "Out of stock"
+          : undefined,
+    image:
+      typeof p.featured_image === "string" ? p.featured_image : undefined,
+    description,
+  };
+}
+
+/** "Lone Peak 9 | Altra Running" → "Lone Peak 9" */
+function stripSiteSuffix(
+  title: string | undefined,
+  siteName: string | undefined,
+): string | undefined {
+  if (!title || !siteName) return title;
+  const esc = siteName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const stripped = title.replace(
+    new RegExp(`\\s*[|–—-]\\s*${esc}\\s*$`, "i"),
+    "",
+  );
+  return stripped || title;
 }
 
 function convertFailureMessage(error: unknown): string {
@@ -634,6 +1033,7 @@ export const enrich = internalAction({
         embedJson: extracted.embedJson,
         sourceDomain: host,
         skipAi: isYouTube,
+        type: extracted.type,
       });
 
       if (isYouTube) {

@@ -10,6 +10,7 @@ export const ITEM_TYPES = [
   "link",
   "document",
   "github",
+  "product",
 ] as const;
 
 export const DOCUMENT_MAX_BYTES = 15 * 1024 * 1024;

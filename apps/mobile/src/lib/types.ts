@@ -9,7 +9,8 @@ export type Card = {
     | "note"
     | "link"
     | "document"
-    | "github";
+    | "github"
+    | "product";
   url?: string;
   title?: string;
   author?: string;
