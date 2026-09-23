@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Linking,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -14,341 +13,411 @@ import {
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
-import { peekCardSeed } from "../../lib/card-seed";
-import { optimisticPatchItem, optimisticRemoveItem } from "../../lib/optimistic";
 import { router, useLocalSearchParams } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useConvexAuth } from "@convex-dev/auth/react";
-import { api } from "../../lib/backend";
-import type { Id } from "../../lib/backend";
-import type { Detail } from "../../lib/types";
-import { colors, fonts, radius } from "../../lib/theme";
-import {
-  timeAgoLong,
-  formatPrice,
-  priceLabel,
-  productInfo,
-} from "../../lib/format";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { api, type Id } from "../../lib/backend";
+import type { Card, Detail } from "../../lib/types";
+import { peekCardSeed } from "../../lib/card-seed";
+import { optimisticPatchItem } from "../../lib/optimistic";
+import { formatPrice, priceLabel, productInfo, timeAgoLong } from "../../lib/format";
+import { useItemActions } from "../../lib/item-actions";
+import { setVaultFilter } from "../../lib/vault-filter";
+import { haptics } from "../../lib/haptics";
+import { fonts, HIT, type Palette, radius, useStyles, useTheme } from "../../lib/theme";
+import { useActionSheet } from "../../components/action-sheet";
+import { Markdown } from "../../components/markdown";
+import { EmptyState, type IconName } from "../../components/ui";
+
+type Item = Detail & { tags?: string[] };
+
+const KIND: Record<Card["type"], { label: string; icon: IconName }> = {
+  article: { label: "Article", icon: "newspaper-outline" },
+  tweet: { label: "Post", icon: "logo-x" },
+  instagram: { label: "Instagram", icon: "logo-instagram" },
+  youtube: { label: "YouTube", icon: "logo-youtube" },
+  image: { label: "Image", icon: "image-outline" },
+  note: { label: "Note", icon: "document-text-outline" },
+  link: { label: "Link", icon: "link-outline" },
+  document: { label: "Document", icon: "document-attach-outline" },
+  github: { label: "GitHub", icon: "logo-github" },
+  product: { label: "Product", icon: "pricetag-outline" },
+};
+
+const READER_PREVIEW_BLOCKS = 6;
+
+function seedAsItem(seed: Card): Item {
+  return {
+    id: seed.id,
+    type: seed.type,
+    url: seed.url,
+    title: seed.title,
+    author: seed.author,
+    sourceDomain: seed.sourceDomain,
+    contentText: seed.preview,
+    summary: seed.summary,
+    thumbnailUrl: seed.thumbnailUrl,
+    embedJson: seed.embedJson,
+    tags: seed.tags,
+    status: seed.status,
+    savedAt: seed.savedAt,
+  };
+}
 
 export default function ItemPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { isLoading, isAuthenticated } = useConvexAuth();
-
-  if (!id || isLoading || !isAuthenticated) {
+  const styles = useStyles(makeStyles);
+  const c = useTheme();
+  if (!id) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Center>
-          <ActivityIndicator color={colors.textFaint} />
-        </Center>
-      </SafeAreaView>
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator color={c.textFaint} />
+      </View>
     );
   }
   return <ItemScreen itemId={id} />;
 }
 
 function ItemScreen({ itemId }: { itemId: string }) {
-  const item = useQuery(api.items.get, { id: itemId as Id<"items"> });
+  const c = useTheme();
+  const styles = useStyles(makeStyles);
+  const insets = useSafeAreaInsets();
+  const showSheet = useActionSheet();
+  const { share, copy, openUrl, confirmDelete } = useItemActions();
+  const id = itemId as Id<"items">;
+
+  const item = useQuery(api.items.get, { id });
   const seed = peekCardSeed(itemId);
-  const update = useMutation(api.items.update).withOptimisticUpdate(
-    (localStore, args) =>
-      optimisticPatchItem(localStore, args.id, {
-        title: args.title,
-        userNote: args.userNote,
-        isDone: args.isDone,
-      }),
+
+  const update = useMutation(api.items.update).withOptimisticUpdate((store, args) =>
+    optimisticPatchItem(store, args.id, { title: args.title, userNote: args.userNote }),
   );
-  const addTag = useMutation(api.items.addTag).withOptimisticUpdate(
-    (localStore, args) => {
-      const current = localStore.getQuery(api.items.get, { id: args.id });
-      const name = args.name.trim().toLowerCase().slice(0, 30);
-      if (current && name.length >= 2 && !current.tags.includes(name)) {
-        optimisticPatchItem(localStore, args.id, {
-          tags: [...current.tags, name],
-        });
-      }
-    },
-  );
-  const removeTag = useMutation(api.items.removeTag).withOptimisticUpdate(
-    (localStore, args) => {
-      const current = localStore.getQuery(api.items.get, { id: args.id });
-      if (current) {
-        optimisticPatchItem(localStore, args.id, {
-          tags: current.tags.filter((t) => t !== args.name.trim().toLowerCase()),
-        });
-      }
-    },
-  );
-  const removeItem = useMutation(api.items.removeItem).withOptimisticUpdate(
-    (localStore, args) => optimisticRemoveItem(localStore, args.id),
-  );
+  const addTag = useMutation(api.items.addTag).withOptimisticUpdate((store, args) => {
+    const current = store.getQuery(api.items.get, { id: args.id });
+    const name = args.name.trim().toLowerCase().slice(0, 30);
+    if (current && name && !current.tags.includes(name)) {
+      optimisticPatchItem(store, args.id, { tags: [...current.tags, name] });
+    }
+  });
+  const removeTag = useMutation(api.items.removeTag).withOptimisticUpdate((store, args) => {
+    const current = store.getQuery(api.items.get, { id: args.id });
+    if (current) {
+      optimisticPatchItem(store, args.id, {
+        tags: current.tags.filter((t) => t !== args.name.trim().toLowerCase()),
+      });
+    }
+  });
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
+  const [noteSaved, setNoteSaved] = useState(false);
   const [addingTag, setAddingTag] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
+  const [readerOpen, setReaderOpen] = useState(false);
   const [ytHiResFailed, setYtHiResFailed] = useState(false);
-  const noteDraftRef = useRef<string | null>(null);
-  const userNoteRef = useRef<string | undefined>(undefined);
 
-  noteDraftRef.current = noteDraft;
-  if (item) userNoteRef.current = item.userNote;
+  // Unsaved edits are flushed when the screen goes away (swipe back).
+  const drafts = useRef({ title: null as string | null, note: null as string | null });
+  const saved = useRef({ title: undefined as string | undefined, note: undefined as string | undefined });
+  drafts.current = { title: titleDraft, note: noteDraft };
+  if (item) saved.current = { title: item.title, note: item.userNote };
   useEffect(() => {
     return () => {
-      const draft = noteDraftRef.current;
-      if (draft !== null && draft !== (userNoteRef.current ?? "")) {
-        void update({
-          id: itemId as Id<"items">,
-          userNote: draft,
-        });
-      }
+      const { title, note } = drafts.current;
+      const patch: { title?: string; userNote?: string } = {};
+      if (title !== null && title !== (saved.current.title ?? "")) patch.title = title;
+      if (note !== null && note !== (saved.current.note ?? "")) patch.userNote = note;
+      if (Object.keys(patch).length > 0) void update({ id, ...patch });
     };
-  }, [itemId, update]);
+  }, [id, update]);
+
+  const it: Item | undefined = item ? { ...item, status: seed?.status } : seed ? seedAsItem(seed) : undefined;
 
   if (item === null) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Header canShare={false} url={undefined} title={undefined} />
-        <Center>
-          <Text style={styles.emptyTitle}>This memory is gone.</Text>
-        </Center>
-      </SafeAreaView>
+      <View style={styles.container}>
+        <NavBar insetTop={insets.top} />
+        <EmptyState icon="trash-outline" title="This memory is gone" body="It may have been deleted on another device." />
+      </View>
+    );
+  }
+  if (!it) {
+    return (
+      <View style={styles.container}>
+        <NavBar insetTop={insets.top} />
+        <View style={styles.center}>
+          <ActivityIndicator color={c.textFaint} />
+        </View>
+      </View>
     );
   }
 
-  const it = (item ??
-    (seed
-      ? {
-          id: seed.id,
-          type: seed.type,
-          url: seed.url,
-          title: seed.title,
-          author: seed.author,
-          sourceDomain: seed.sourceDomain,
-          contentText: seed.preview,
-          summary: seed.summary,
-          thumbnailUrl: seed.thumbnailUrl,
-          embedJson: seed.embedJson,
-          tags: seed.tags,
-          savedAt: seed.savedAt,
-        }
-      : undefined)) as (Detail & { tags?: string[] }) | undefined;
-
-  if (!it)
-    return (
-      <SafeAreaView style={styles.container}>
-        <Header canShare={false} url={undefined} title={undefined} />
-        <Center>
-          <ActivityIndicator color={colors.textFaint} />
-        </Center>
-      </SafeAreaView>
-    );
-  const embed =
-    typeof it.embedJson === "object" && it.embedJson !== null
-      ? (it.embedJson as Record<string, unknown>)
-      : {};
-  const isYouTube = it.type === "youtube";
-  const isInstagram = it.type === "instagram";
-  const isNote = it.type === "note";
-  const isGitHub = it.type === "github";
-  const product =
-    it.type === "product" ? productInfo(it.embedJson) : undefined;
+  const embed = typeof it.embedJson === "object" && it.embedJson !== null ? (it.embedJson as Record<string, unknown>) : {};
+  const kind = KIND[it.type];
+  const product = it.type === "product" ? productInfo(it.embedJson) : undefined;
+  const openTarget = it.url ?? it.fileUrl;
   const ytId = typeof embed.videoId === "string" ? embed.videoId : undefined;
-  const ytPoster = ytId
-    ? ytHiResFailed
-      ? (it.thumbnailUrl ?? `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`)
-      : `https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg`
-    : it.thumbnailUrl;
-  const openUrl = it.url ?? it.fileUrl;
+  const filename = typeof embed.filename === "string" ? embed.filename : undefined;
+  const aspect = seed?.thumbWidth && seed.thumbHeight ? Math.max(0.6, Math.min(seed.thumbWidth / seed.thumbHeight, 2)) : 16 / 10;
+  const hasReader = !!it.contentText && it.type !== "note" && it.type !== "document";
+  const noteValue = noteDraft ?? it.userNote ?? "";
+
+  function saveTitle() {
+    if (titleDraft !== null && titleDraft !== (it?.title ?? "")) void update({ id, title: titleDraft });
+  }
+
+  function saveNote() {
+    if (noteDraft !== null && noteDraft !== (it?.userNote ?? "")) {
+      void update({ id, userNote: noteDraft }).then(() => setNoteSaved(true));
+    }
+  }
 
   async function submitTag() {
     const name = tagDraft.trim();
-    if (!name) {
-      setAddingTag(false);
-      return;
-    }
+    setTagDraft("");
+    setAddingTag(false);
+    if (!name) return;
+    haptics.light();
     try {
-      await addTag({ id: itemId as Id<"items">, name });
-      setTagDraft("");
-      setAddingTag(false);
-    } catch {}
-  }
-
-  const currentNote = it.userNote ?? "";
-
-  function saveNote() {
-    if (noteDraft !== null && noteDraft !== currentNote) {
-      void update({
-        id: itemId as Id<"items">,
-        userNote: noteDraft,
-      });
+      await addTag({ id, name });
+    } catch {
+      /* optimistic chip rolls back on its own */
     }
   }
 
-  function confirmDelete() {
-    Alert.alert("Delete this memory?", "This cannot be undone.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          void removeItem({ id: itemId as Id<"items"> }).then(() =>
-            router.back(),
-          );
-        },
-      },
-    ]);
+  function showTag(tag: string) {
+    setVaultFilter({ tag });
+    router.navigate("/");
   }
+
+  function more() {
+    const url = it?.url;
+    showSheet({
+      actions: [
+        ...(url
+          ? [
+              { label: "Copy Link", icon: "link-outline" as const, onPress: () => void copy(url) },
+              { label: "Open in Browser", icon: "globe-outline" as const, onPress: () => openUrl(url) },
+            ]
+          : []),
+        ...(it?.contentText
+          ? [{ label: "Copy Text", icon: "copy-outline" as const, onPress: () => void copy(it.contentText ?? "", "Text") }]
+          : []),
+        { label: "Delete Memory", icon: "trash-outline", destructive: true, onPress: () => confirmDelete(itemId, () => router.back()) },
+      ],
+    });
+  }
+
+  const actions: { icon: IconName; label: string; onPress: () => void }[] = [];
+  if (openTarget) {
+    actions.push({
+      icon: it.type === "youtube" ? "play" : it.type === "document" ? "document-outline" : "compass-outline",
+      label: it.type === "youtube" ? "Watch" : it.type === "document" ? "View File" : "Open",
+      onPress: () => openUrl(openTarget),
+    });
+  }
+  if (it.url || it.contentText) {
+    actions.push({
+      icon: "share-outline",
+      label: "Share",
+      onPress: () => void share(it.title, it.url ?? undefined),
+    });
+  }
+  if (it.url) actions.push({ icon: "link-outline", label: "Copy Link", onPress: () => void copy(it.url ?? "") });
+  actions.push({ icon: "ellipsis-horizontal", label: "More", onPress: more });
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Header url={it.url ?? it.fileUrl} title={it.title} canShare />
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <NavBar insetTop={insets.top} onShare={it.url ? () => void share(it.title, it.url) : undefined} onMore={more} />
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 40 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
       >
-        {/* Media */}
-        {isYouTube && typeof embed.videoId === "string" ? (
+        {/* ---------- Hero ---------- */}
+        {it.type === "youtube" && (ytId || it.thumbnailUrl) ? (
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Play video"
+            accessibilityHint="Opens the video on YouTube"
+            onPress={() => it.url && openUrl(it.url)}
             style={({ pressed }) => [styles.heroWrap, pressed && styles.pressed]}
-            onPress={() => it.url && void Linking.openURL(it.url)}
           >
-            {ytPoster ? (
-              <Image
-                source={{ uri: ytPoster }}
-                style={[styles.heroImage, styles.heroVideo]}
-                contentFit="cover"
-                onError={() => {
-                  if (!ytHiResFailed) setYtHiResFailed(true);
-                }}
-              />
-            ) : (
-              <View style={[styles.heroImage, styles.heroVideo, styles.heroPlaceholder]}>
-                <Ionicons name="logo-youtube" size={40} color={colors.textFaint} />
-              </View>
-            )}
-            <View style={styles.playOverlay}>
+            <Image
+              source={{
+                uri: ytId
+                  ? ytHiResFailed
+                    ? (it.thumbnailUrl ?? `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`)
+                    : `https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg`
+                  : it.thumbnailUrl,
+              }}
+              style={[styles.hero, { aspectRatio: 16 / 9 }]}
+              contentFit="cover"
+              onError={() => setYtHiResFailed(true)}
+              accessibilityIgnoresInvertColors
+            />
+            <View style={styles.playOverlay} pointerEvents="none">
               <View style={styles.playCircle}>
-                <Ionicons
-                  name="play"
-                  size={22}
-                  color="#fff"
-                  style={styles.playIcon}
-                />
+                <Ionicons name="play" size={26} color="#fff" style={styles.playIcon} />
               </View>
-              <Text style={styles.playHint}>Watch on YouTube</Text>
             </View>
           </Pressable>
-        ) : isInstagram && it.thumbnailUrl ? (
+        ) : it.type === "note" ? (
+          <View style={styles.noteHero}>
+            <Text style={styles.noteHeroText} selectable>
+              {it.contentText}
+            </Text>
+          </View>
+        ) : it.type === "document" ? (
+          <View style={styles.docHero}>
+            <View style={styles.docHeader}>
+              <Ionicons name="document-text-outline" size={16} color={c.textFaint} />
+              <Text style={styles.docName} numberOfLines={1}>
+                {filename ?? "Document"}
+              </Text>
+            </View>
+            <View style={styles.docBody}>
+              {it.contentText?.trim() ? (
+                <Markdown onLink={openUrl} maxBlocks={readerOpen ? undefined : READER_PREVIEW_BLOCKS}>
+                  {it.contentText}
+                </Markdown>
+              ) : (
+                <Text style={styles.muted}>No text could be extracted from this file.</Text>
+              )}
+            </View>
+            {it.contentText?.trim() ? (
+              <ShowMore open={readerOpen} onToggle={() => setReaderOpen((v) => !v)} />
+            ) : null}
+          </View>
+        ) : it.thumbnailUrl && it.type !== "github" ? (
           <Pressable
-            style={({ pressed }) => [styles.heroWrap, pressed && styles.pressed]}
-            onPress={() => it.url && void Linking.openURL(it.url)}
+            accessibilityRole={it.url ? "button" : "image"}
+            accessibilityLabel={it.title ? `Image: ${it.title}` : "Image"}
+            accessibilityHint={it.url ? "Opens the original" : undefined}
+            disabled={!it.url}
+            onPress={() => it.url && openUrl(it.url)}
+            style={styles.heroWrap}
           >
             <Image
               source={{ uri: it.thumbnailUrl }}
-              style={[styles.heroImage, styles.heroInstagram]}
+              style={[styles.hero, { aspectRatio: it.type === "instagram" ? 4 / 5 : aspect }]}
               contentFit="cover"
+              accessibilityIgnoresInvertColors
             />
           </Pressable>
-        ) : it.thumbnailUrl && !isNote && !isGitHub ? (
-          <Image
-            source={{ uri: it.thumbnailUrl }}
-            style={styles.heroImage}
-            contentFit="cover"
-          />
-        ) : isNote && it.contentText ? (
-          <View style={styles.noteBody}>
-            <Text style={styles.noteText}>{it.contentText}</Text>
-          </View>
-        ) : it.contentText ? (
-          <View style={styles.reader}>
-            {it.contentText.slice(0, 16000).split(/\n{2,}/).map((p, i) => (
-              <Text key={i} style={styles.paragraph}>
-                {p}
-              </Text>
-            ))}
-            <OriginalLink url={it.url ?? it.fileUrl} />
-          </View>
-        ) : (
-          <View style={styles.failedBox}>
-            <Ionicons name="cloud-offline-outline" size={20} color={colors.textFaint} />
-            <Text style={styles.failedText}>
-              We couldn&apos;t extract this one.{it.url ? " You can still open the original." : ""}
+        ) : null}
+
+        {/* ---------- Title block ---------- */}
+        <View style={styles.titleBlock}>
+          <View style={styles.kindRow}>
+            <Ionicons name={kind.icon} size={14} color={c.textMuted} />
+            <Text style={styles.kindText} numberOfLines={1}>
+              {[kind.label, it.sourceDomain].filter(Boolean).join("  ·  ")}
             </Text>
           </View>
-        )}
-
-        {/* Editable title */}
-        <TextInput
-          value={titleDraft ?? it.title ?? ""}
-          onChangeText={setTitleDraft}
-          onBlur={() => {
-            if (titleDraft !== null && titleDraft !== it.title) {
-              void update({ id: itemId as Id<"items">, title: titleDraft });
-            }
-          }}
-          placeholder="Title goes here"
-          placeholderTextColor={colors.textFaint}
-          style={styles.titleInput}
-          multiline
-        />
-        <Text style={styles.metaLine}>
-          {timeAgoLong(it.savedAt)}
-          {it.sourceDomain ? `  ·  ${it.sourceDomain}` : ""}
-        </Text>
+          <TextInput
+            value={titleDraft ?? it.title ?? ""}
+            onChangeText={setTitleDraft}
+            onBlur={saveTitle}
+            placeholder="Title goes here"
+            placeholderTextColor={c.placeholder}
+            selectionColor={c.tint}
+            style={styles.title}
+            multiline
+            scrollEnabled={false}
+            submitBehavior="blurAndSubmit"
+            returnKeyType="done"
+            accessibilityLabel="Title"
+            accessibilityHint="Edit to rename this memory"
+          />
+          <Text style={styles.meta}>
+            {[it.author ? `By ${it.author.replace(/^@/, "")}` : undefined, `Saved ${timeAgoLong(it.savedAt)}`]
+              .filter(Boolean)
+              .join("  ·  ")}
+          </Text>
+          {it.status === "pending" ? (
+            <View style={styles.banner} accessibilityLiveRegion="polite">
+              <ActivityIndicator size="small" color={c.textMuted} />
+              <Text style={styles.bannerText}>Still reading this one — summary and tags will appear shortly.</Text>
+            </View>
+          ) : it.status === "failed" ? (
+            <View style={[styles.banner, { backgroundColor: c.dangerSoft }]}>
+              <Ionicons name="warning" size={16} color={c.danger} />
+              <Text style={styles.bannerText}>We couldn’t read this page. Paste the link again to retry.</Text>
+            </View>
+          ) : null}
+        </View>
 
         {product ? (
-          <View style={styles.priceRow}>
-            <Text style={styles.priceBig}>{priceLabel(product)}</Text>
-            {product.compareAtPrice !== undefined &&
-            product.price !== undefined &&
-            product.compareAtPrice > product.price ? (
-              <Text style={styles.priceWas}>
-                {formatPrice(product.compareAtPrice, product.currency)}
-              </Text>
+          <View style={styles.priceRow} accessible accessibilityLabel={`Price ${priceLabel(product)}`}>
+            <Text style={styles.price}>{priceLabel(product)}</Text>
+            {product.compareAtPrice !== undefined && product.price !== undefined && product.compareAtPrice > product.price ? (
+              <Text style={styles.priceWas}>{formatPrice(product.compareAtPrice, product.currency)}</Text>
             ) : null}
-            {product.availability ? (
-              <Text style={styles.priceAvailability}>
-                {product.availability}
-              </Text>
-            ) : null}
+            {product.availability ? <Text style={styles.availability}>{product.availability}</Text> : null}
           </View>
         ) : null}
 
-        {/* Summary */}
+        {/* ---------- Actions ---------- */}
+        <View style={styles.actions}>
+          {actions.map((a) => (
+            <Pressable
+              key={a.label}
+              accessibilityRole="button"
+              accessibilityLabel={a.label}
+              onPress={a.onPress}
+              style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+            >
+              <Ionicons name={a.icon} size={21} color={c.text} />
+              <Text style={styles.actionText} numberOfLines={1}>
+                {a.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* ---------- Summary ---------- */}
         {it.summary ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{isYouTube ? "TLDW" : "TLDR"}</Text>
-            <View style={styles.tldrBox}>
-              <Text style={styles.tldrText}>{it.summary}</Text>
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardLabel} accessibilityRole="header" accessibilityLabel="Summary">
+                {it.type === "youtube" ? "TLDW" : "TLDR"}
+              </Text>
             </View>
+            <Text style={styles.summary} selectable>
+              {it.summary}
+            </Text>
           </View>
         ) : null}
 
-        {openUrl ? (
-          <Pressable
-            style={({ pressed }) => [styles.doneButton, pressed && styles.pressed]}
-            onPress={() => void Linking.openURL(openUrl)}
-          >
-            <Ionicons name="open-outline" size={17} color={colors.textMuted} />
-            <Text style={styles.doneButtonText}>Open original</Text>
-          </Pressable>
-        ) : null}
-
-        {/* Tags */}
+        {/* ---------- Tags ---------- */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabelCaps}>VAULT TAGS</Text>
-          <View style={styles.tagRow}>
+          <Text style={styles.sectionLabel} accessibilityRole="header">
+            Vault tags
+          </Text>
+          <View style={styles.tags}>
             {(it.tags ?? []).map((t) => (
-              <View key={t} style={styles.chip}>
-                <Text style={styles.chipText}>#{t}</Text>
+              <View key={t} style={styles.tag}>
                 <Pressable
-                  onPress={() =>
-                    void removeTag({ id: itemId as Id<"items">, name: t })
-                  }
-                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Tag ${t}`}
+                  accessibilityHint="Shows everything with this tag"
+                  onPress={() => showTag(t)}
+                  style={styles.tagMain}
                 >
-                  <Ionicons name="close" size={13} color={colors.textFaint} />
+                  <Text style={styles.tagText}>{t}</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove tag ${t}`}
+                  onPress={() => {
+                    haptics.light();
+                    void removeTag({ id, name: t });
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, right: 6 }}
+                  style={styles.tagRemove}
+                >
+                  <Ionicons name="close" size={14} color={c.textFaint} />
                 </Pressable>
               </View>
             ))}
@@ -359,344 +428,297 @@ function ItemScreen({ itemId }: { itemId: string }) {
                 onChangeText={setTagDraft}
                 onSubmitEditing={() => void submitTag()}
                 onBlur={() => void submitTag()}
-                placeholder="tag name…"
-                placeholderTextColor={colors.textFaint}
+                placeholder="New tag"
+                placeholderTextColor={c.placeholder}
+                selectionColor={c.tint}
                 style={styles.tagInput}
                 returnKeyType="done"
                 autoCapitalize="none"
                 autoCorrect={false}
+                maxLength={30}
+                accessibilityLabel="New tag name"
               />
             ) : (
               <Pressable
-                style={({ pressed }) => [
-                  styles.addChip,
-                  pressed && styles.pressed,
-                ]}
+                accessibilityRole="button"
                 onPress={() => setAddingTag(true)}
+                style={({ pressed }) => [styles.addTag, pressed && styles.pressed]}
               >
-                <Ionicons name="add" size={13} color="#fff" />
-                <Text style={styles.addChipText}>Add tag</Text>
+                <Ionicons name="add" size={16} color={c.onAccent} />
+                <Text style={styles.addTagText}>Add tag</Text>
               </Pressable>
             )}
           </View>
         </View>
 
-        {/* Notes */}
+        {/* ---------- Note ---------- */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabelCaps}>VAULT NOTES</Text>
+          <View style={styles.sectionRow}>
+            <Text style={styles.sectionLabel} accessibilityRole="header">
+              Vault notes
+            </Text>
+            {noteSaved && noteDraft !== null && noteDraft === (it.userNote ?? "") ? (
+              <Text style={styles.savedHint} accessibilityLiveRegion="polite">
+                Saved
+              </Text>
+            ) : null}
+          </View>
           <TextInput
-            value={noteDraft ?? it.userNote ?? ""}
-            onChangeText={setNoteDraft}
+            value={noteValue}
+            onChangeText={(v) => {
+              setNoteDraft(v);
+              setNoteSaved(false);
+            }}
             onBlur={saveNote}
-            placeholder="Type here to add a private note… searchable too."
-            placeholderTextColor={colors.textFaint}
+            placeholder="Type here to add a note…"
+            placeholderTextColor={c.placeholder}
+            selectionColor={c.tint}
             style={styles.noteInput}
             multiline
+            textAlignVertical="top"
+            accessibilityLabel="Your note"
           />
         </View>
 
-        {/* Delete */}
+        {/* ---------- Reader ---------- */}
+        {hasReader ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel} accessibilityRole="header">
+              {it.type === "tweet" ? "Post" : "Text"}
+            </Text>
+            <View style={styles.card}>
+              <Markdown size="reader" onLink={openUrl} maxBlocks={readerOpen ? undefined : READER_PREVIEW_BLOCKS}>
+                {(it.contentText ?? "").slice(0, readerOpen ? 40000 : 6000)}
+              </Markdown>
+              <ShowMore open={readerOpen} onToggle={() => setReaderOpen((v) => !v)} />
+            </View>
+          </View>
+        ) : null}
+
+        {/* ---------- Delete ---------- */}
         <Pressable
-          style={({ pressed }) => [
-            styles.deleteButton,
-            pressed && styles.pressed,
-          ]}
-          onPress={confirmDelete}
+          accessibilityRole="button"
+          onPress={() => confirmDelete(itemId, () => router.back())}
+          style={({ pressed }) => [styles.delete, pressed && styles.actionPressed]}
         >
-          <Ionicons name="trash-outline" size={16} color={colors.danger} />
-          <Text style={styles.deleteText}>Delete memory</Text>
+          <Text style={styles.deleteText}>Delete Memory</Text>
         </Pressable>
       </ScrollView>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
-function OriginalLink({ url }: { url?: string }) {
-  if (!url) return null;
+function ShowMore({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const styles = useStyles(makeStyles);
   return (
-    <Pressable onPress={() => void Linking.openURL(url)}>
-      <Text style={styles.readMore}>Open original for the full piece ↗</Text>
+    <Pressable accessibilityRole="button" onPress={onToggle} hitSlop={8} style={styles.showMore}>
+      <Text style={styles.showMoreText}>{open ? "Show Less" : "Show More"}</Text>
     </Pressable>
   );
 }
 
-function Header({
-  url,
-  title,
-  canShare,
-}: {
-  url?: string;
-  title?: string;
-  canShare?: boolean;
-}) {
-  async function share() {
-    try {
-      await Share.share({ message: [title, url].filter(Boolean).join("\n") });
-    } catch {}
-  }
+function NavBar({ insetTop, onShare, onMore }: { insetTop: number; onShare?: () => void; onMore?: () => void }) {
+  const c = useTheme();
+  const styles = useStyles(makeStyles);
   return (
-    <View style={styles.headerRow}>
+    <View style={[styles.nav, { paddingTop: insetTop }]}>
       <Pressable
-        onPress={() => router.back()}
-        hitSlop={10}
-        style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
+        hitSlop={8}
+        style={({ pressed }) => [styles.back, pressed && styles.pressed]}
       >
-        <Ionicons name="chevron-back" size={25} color={colors.text} />
+        <Ionicons name="chevron-back" size={26} color={c.tint} />
+        <Text style={styles.backText}>Back</Text>
       </Pressable>
-      <View style={styles.headerSpacer} />
-      {url ? (
-        <>
-          {canShare ? (
-            <Pressable
-              onPress={() => void share()}
-              hitSlop={10}
-              style={({ pressed }) => [
-                styles.headerButton,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Ionicons
-                name="share-outline"
-                size={21}
-                color={colors.textMuted}
-              />
-            </Pressable>
-          ) : null}
-          <Pressable
-            onPress={() => void Linking.openURL(url)}
-            hitSlop={10}
-            style={({ pressed }) => [
-              styles.headerButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Ionicons name="open-outline" size={21} color={colors.textMuted} />
-          </Pressable>
-        </>
+      <View style={styles.flex} />
+      {onShare ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Share" onPress={onShare} style={({ pressed }) => [styles.navIcon, pressed && styles.pressed]}>
+          <Ionicons name="share-outline" size={23} color={c.tint} />
+        </Pressable>
+      ) : null}
+      {onMore ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="More actions" onPress={onMore} style={({ pressed }) => [styles.navIcon, pressed && styles.pressed]}>
+          <Ionicons name="ellipsis-horizontal-circle" size={25} color={c.tint} />
+        </Pressable>
       ) : null}
     </View>
   );
 }
 
-function Center({ children }: { children: React.ReactNode }) {
-  return <View style={styles.center}>{children}</View>;
-}
+const makeStyles = (c: Palette) =>
+  StyleSheet.create({
+    flex: { flex: 1 },
+    container: { flex: 1, backgroundColor: c.bg },
+    center: { flex: 1, alignItems: "center", justifyContent: "center" },
+    pressed: { opacity: 0.55 },
+    muted: { fontSize: 15, color: c.textMuted, fontStyle: "italic" },
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.bg,
-  },
-  headerButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerSpacer: { flex: 1 },
-  scroll: { padding: 18, paddingBottom: 60, gap: 16 },
-  pressed: { opacity: 0.6 },
-  heroWrap: { position: "relative" },
-  heroImage: {
-    width: "100%",
-    aspectRatio: 16 / 10,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
-  heroVideo: {},
-  heroInstagram: { aspectRatio: 4 / 5, alignSelf: "center", maxWidth: 380 },
-  heroPlaceholder: { alignItems: "center", justifyContent: "center" },
-  playOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  playCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "rgba(12,10,9,0.62)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  playIcon: { marginLeft: 3 },
-  playHint: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "600",
-    textShadowColor: "rgba(0,0,0,0.5)",
-    textShadowRadius: 4,
-  },
-  noteBody: {
-    backgroundColor: colors.noteBg,
-    borderColor: colors.noteBorder,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: 18,
-  },
-  noteText: {
-    fontFamily: fonts.serif,
-    fontSize: 19,
-    lineHeight: 31,
-    color: colors.textBody,
-  },
-  reader: { gap: 14 },
-  paragraph: { fontSize: 15, lineHeight: 24, color: colors.textBody },
-  readMore: { color: colors.accent, fontSize: 14, fontWeight: "600" },
-  failedBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: 16,
-    borderStyle: "dashed",
-  },
-  failedText: {
-    flexShrink: 1,
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  titleInput: {
-    fontFamily: fonts.serif,
-    fontSize: 26,
-    fontWeight: "700",
-    color: colors.text,
-    lineHeight: 34,
-    padding: 0,
-  },
-  metaLine: { fontSize: 12.5, color: colors.textFaint, marginTop: -8 },
-  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 10 },
-  priceBig: {
-    fontSize: 21,
-    fontWeight: "700",
-    color: colors.text,
-    letterSpacing: -0.3,
-  },
-  priceWas: {
-    fontSize: 13,
-    color: colors.textFaint,
-    textDecorationLine: "line-through",
-  },
-  priceAvailability: { fontSize: 12.5, color: colors.textMuted },
-  section: { gap: 8, marginTop: 2 },
-  sectionLabel: {
-    fontFamily: fonts.serif,
-    fontStyle: "italic",
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-  sectionLabelCaps: {
-    fontSize: 11,
-    fontWeight: "600",
-    letterSpacing: 1.5,
-    color: colors.textFaint,
-  },
-  tldrBox: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: 14,
-    backgroundColor: colors.surface,
-  },
-  tldrText: { fontSize: 14, lineHeight: 22, color: colors.textBody },
-  doneButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    borderRadius: radius.full,
-    paddingVertical: 13,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  doneButtonActive: {
-    backgroundColor: colors.doneSoft,
-    borderColor: "#a7f3d0",
-  },
-  doneButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.textMuted,
-  },
-  doneButtonTextActive: { color: colors.done },
-  tagRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.full,
-    paddingLeft: 11,
-    paddingRight: 8,
-    paddingVertical: 6,
-    backgroundColor: colors.surface,
-  },
-  chipText: { fontSize: 12.5, color: colors.textMuted },
-  tagInput: {
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: radius.full,
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    fontSize: 12.5,
-    minWidth: 110,
-    color: colors.text,
-  },
-  addChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: colors.accent,
-    borderRadius: radius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  addChipText: { color: "#fff", fontSize: 12.5, fontWeight: "600" },
-  noteInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    fontSize: 14,
-    lineHeight: 21,
-    minHeight: 96,
-    textAlignVertical: "top",
-    color: colors.text,
-  },
-  deleteButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    borderRadius: radius.full,
-    paddingVertical: 13,
-    borderWidth: 1,
-    borderColor: "#fecaca",
-    backgroundColor: colors.dangerSoft,
-    marginTop: 8,
-  },
-  deleteText: { color: colors.danger, fontSize: 14, fontWeight: "600" },
-  emptyTitle: {
-    fontFamily: fonts.serif,
-    fontSize: 22,
-    fontStyle: "italic",
-    color: colors.textFaint,
-  },
-});
+    nav: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4, backgroundColor: c.bg },
+    back: { flexDirection: "row", alignItems: "center", minHeight: HIT, paddingRight: 8 },
+    backText: { fontSize: 17, color: c.tint, marginLeft: -2 },
+    navIcon: { width: HIT, height: HIT, alignItems: "center", justifyContent: "center" },
+
+    scroll: { paddingHorizontal: 16, paddingTop: 4, gap: 20 },
+
+    heroWrap: { borderRadius: radius.lg, overflow: "hidden", backgroundColor: c.fill },
+    hero: { width: "100%", backgroundColor: c.fill },
+    playOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+    playCircle: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.3)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    playIcon: { marginLeft: 4 },
+
+    noteHero: {
+      backgroundColor: c.noteBg,
+      borderColor: c.noteBorder,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: radius.lg,
+      padding: 20,
+    },
+    noteHeroText: { fontFamily: fonts.serif, fontSize: 24, lineHeight: 36, color: c.textBody },
+
+    docHero: {
+      backgroundColor: c.surface,
+      borderRadius: radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.border,
+      overflow: "hidden",
+    },
+    docHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.separator,
+    },
+    docName: { flex: 1, fontSize: 12, fontWeight: "500", color: c.textFaint, letterSpacing: 1.2, textTransform: "uppercase" },
+    docBody: { padding: 16 },
+
+    titleBlock: { gap: 6 },
+    kindRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+    kindText: { fontSize: 12, fontWeight: "500", color: c.textFaint, textTransform: "uppercase", letterSpacing: 1.5, flexShrink: 1 },
+    title: { fontFamily: fonts.serif, fontSize: 30, lineHeight: 36, color: c.text, padding: 0 },
+    meta: { fontSize: 15, color: c.textMuted },
+    banner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginTop: 8,
+      padding: 12,
+      borderRadius: radius.md,
+      backgroundColor: c.fill,
+    },
+    bannerText: { flex: 1, fontSize: 15, lineHeight: 20, color: c.text },
+
+    priceRow: { flexDirection: "row", alignItems: "baseline", gap: 10, marginTop: -6 },
+    price: { fontSize: 24, fontWeight: "700", color: c.text },
+    priceWas: { fontSize: 15, color: c.textFaint, textDecorationLine: "line-through" },
+    availability: { fontSize: 15, color: c.success },
+
+    actions: { flexDirection: "row", gap: 8 },
+    action: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      minHeight: 58,
+      borderRadius: radius.md,
+      backgroundColor: c.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.border,
+      paddingHorizontal: 4,
+    },
+    actionPressed: { backgroundColor: c.fillStrong },
+    actionText: { fontSize: 12, fontWeight: "500", color: c.textBody },
+
+    card: {
+      backgroundColor: c.surface,
+      borderRadius: radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.border,
+      padding: 16,
+      gap: 10,
+    },
+    cardHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+    cardLabel: { fontFamily: fonts.serifItalic, fontSize: 16, color: c.textMuted },
+    summary: { fontSize: 17, lineHeight: 25, color: c.textBody },
+
+    section: { gap: 10 },
+    sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    // "VAULT TAGS" / "VAULT NOTES" — the web's small tracked caps.
+    sectionLabel: { fontSize: 12, fontWeight: "500", color: c.textFaint, textTransform: "uppercase", letterSpacing: 1.8 },
+    savedHint: { fontSize: 13, color: c.textFaint },
+
+    tags: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    tag: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: c.surface,
+      borderRadius: radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.border,
+    },
+    tagMain: { paddingLeft: 13, paddingRight: 4, minHeight: 36, justifyContent: "center" },
+    tagText: { fontSize: 15, color: c.textMuted },
+    tagRemove: { width: 30, minHeight: 36, alignItems: "center", justifyContent: "center", paddingRight: 4 },
+    tagInput: {
+      minWidth: 120,
+      minHeight: 36,
+      paddingHorizontal: 13,
+      borderRadius: radius.full,
+      borderWidth: 1,
+      borderColor: c.tint,
+      fontSize: 15,
+      color: c.text,
+      backgroundColor: c.surface,
+    },
+    addTag: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      minHeight: 36,
+      paddingHorizontal: 13,
+      borderRadius: radius.full,
+      backgroundColor: c.accent,
+    },
+    addTagText: { fontSize: 15, fontWeight: "500", color: c.onAccent },
+
+    noteInput: {
+      minHeight: 110,
+      backgroundColor: c.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.border,
+      borderRadius: radius.md,
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 14,
+      fontSize: 17,
+      lineHeight: 24,
+      color: c.text,
+    },
+
+    showMore: { alignSelf: "flex-start", minHeight: HIT - 8, justifyContent: "center", paddingHorizontal: 16, paddingBottom: 6 },
+    showMoreText: { fontSize: 17, fontWeight: "500", color: c.tint },
+
+    delete: {
+      minHeight: HIT + 6,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: radius.full,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginTop: 8,
+    },
+    deleteText: { fontSize: 17, color: c.danger },
+  });
