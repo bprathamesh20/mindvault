@@ -1,207 +1,27 @@
 "use client";
 
-import type { ComponentType, MouseEvent, ReactNode } from "react";
+import type { ComponentType, KeyboardEvent, ReactNode } from "react";
 import {
-  CircleDot,
-  Ellipsis,
   FileSpreadsheet,
   FileText,
-  GitFork,
-  GitMerge,
-  GitPullRequest,
-  Heart,
-  MessageSquare,
   Image as ImageIcon,
   Link2,
   LoaderCircle,
   Newspaper,
   Play,
   Presentation,
-  Repeat2,
   Star,
   StickyNote,
   TriangleAlert,
-  Users,
 } from "lucide-react";
 import type { Card } from "./types";
 
-/* ------------------------------------------------------------------ */
-/* Shell + shared bits                                                 */
-/* ------------------------------------------------------------------ */
-
-// --card is the surface colour; media fades into it so feature images feel
-// part of the card rather than pasted on top. Keep it in sync with the hover bg.
-const SHELL =
-  "group relative mb-5 break-inside-avoid overflow-hidden rounded-2xl border transition-all duration-200 " +
-  "[--card:#ffffff] dark:[--card:#17171d] dark:hover:[--card:#1b1b22] " +
-  "border-stone-200/80 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:-translate-y-0.5 hover:border-stone-300 hover:shadow-[0_12px_32px_-12px_rgba(0,0,0,0.18)] " +
-  "dark:border-white/[0.06] dark:bg-[#17171d] dark:shadow-none dark:hover:border-white/[0.13] dark:hover:bg-[#1b1b22] dark:hover:shadow-[0_16px_40px_-16px_rgba(0,0,0,0.7)]";
-
-const TITLE =
-  "text-[15px] font-semibold leading-snug tracking-[-0.01em] text-stone-900 dark:text-[#f1f1f4]";
-const BODY = "text-[13px] leading-relaxed text-stone-500 dark:text-[#9a9aa6]";
-const META = "text-[11.5px] text-stone-400 dark:text-[#6e6e7a]";
-
-function Shell({
-  item,
-  onOpen,
-  className = "",
-  children,
-}: {
-  item: Card;
-  onOpen?: (item: Card) => void;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <article
-      onClick={() => onOpen?.(item)}
-      className={`${SHELL} ${onOpen ? "cursor-pointer" : ""} ${className}`}
-    >
-      {children}
-    </article>
-  );
-}
-
-function Kebab({
-  overlay,
-  onClick,
-}: {
-  overlay?: boolean;
-  onClick?: (e: MouseEvent<HTMLButtonElement>) => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label="Open"
-      onClick={onClick}
-      className={
-        overlay
-          ? "grid h-7 w-7 place-items-center rounded-full bg-black/40 text-white/90 backdrop-blur-md transition hover:bg-black/60"
-          : "-mr-1.5 grid h-7 w-7 place-items-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700 dark:text-[#6e6e7a] dark:hover:bg-white/[0.06] dark:hover:text-[#e6e6ea]"
-      }
-    >
-      <Ellipsis size={16} strokeWidth={2.25} />
-    </button>
-  );
-}
-
-type BadgeSpec = {
-  label: string;
-  Icon: ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
-  chip: string;
-};
-
-function TypeBadge({ spec, overlay }: { spec: BadgeSpec; overlay?: boolean }) {
-  const { label, Icon, chip } = spec;
-  if (overlay) {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 py-1 pl-1 pr-2.5 text-[11.5px] font-medium text-stone-800 ring-1 ring-black/[0.06] shadow-sm backdrop-blur-md dark:bg-black/45 dark:text-white dark:ring-white/10">
-        <span className={`grid h-5 w-5 place-items-center rounded-md ${chip}`}>
-          <Icon size={11} strokeWidth={2.5} />
-        </span>
-        {label}
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-2 text-[12px] font-medium text-stone-500 dark:text-[#a3a3ae]">
-      <span className={`grid h-7 w-7 place-items-center rounded-lg ${chip}`}>
-        <Icon size={14} strokeWidth={2.25} />
-      </span>
-      {label}
-    </span>
-  );
-}
-
-function Header({ spec, onKebab }: { spec: BadgeSpec; onKebab?: () => void }) {
-  return (
-    <div className="flex items-center justify-between px-4 pt-3.5">
-      <TypeBadge spec={spec} />
-      <Kebab onClick={(e) => { e.stopPropagation(); onKebab?.(); }} />
-    </div>
-  );
-}
-
-function Tags({ tags, max = 3 }: { tags: string[]; max?: number }) {
-  if (tags.length === 0) return null;
-  return (
-    <div className="mt-3 flex flex-wrap gap-1.5">
-      {tags.slice(0, max).map((tag) => (
-        <span
-          key={tag}
-          className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-medium text-stone-600 dark:bg-white/[0.06] dark:text-[#b4b4bf]"
-        >
-          #{tag}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function Footer({ left, savedAt }: { left?: ReactNode; savedAt: number }) {
-  return (
-    <div className={`mt-3 flex items-center justify-between gap-3 ${META}`}>
-      <span className="min-w-0 truncate">{left}</span>
-      <span className="shrink-0">Saved {timeAgo(savedAt)}</span>
-    </div>
-  );
-}
-
-function Media({
-  item,
-  spec,
-  play,
-  cornerLabel,
-  maxH = "max-h-[300px]",
-  onKebab,
-}: {
-  item: Card;
-  spec: BadgeSpec;
-  play?: boolean;
-  cornerLabel?: string;
-  maxH?: string;
-  onKebab?: () => void;
-}) {
-  const size = saneThumb(item.thumbWidth, item.thumbHeight);
-  return (
-    <div className="relative -mb-1 overflow-hidden">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={item.thumbnailUrl}
-        alt={item.title ?? ""}
-        width={size?.w}
-        height={size?.h}
-        loading="lazy"
-        decoding="async"
-        className={`${maxH} w-full object-cover dark:brightness-[0.9] dark:saturate-[0.95]`}
-        style={size ? { aspectRatio: `${size.w} / ${size.h}` } : { aspectRatio: "16 / 10" }}
-      />
-      {/* Bleed the bottom of the image into the card surface. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[46%] bg-gradient-to-t from-(--card) from-[4%] via-(--card)/70 via-[40%] to-transparent dark:h-[58%] dark:from-[6%] dark:via-[42%] transition-colors duration-200" />
-      {/* Soft vignette at the top keeps the kebab readable on bright images. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/35 to-transparent" />
-      {play ? (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center">
-          <span className="grid h-12 w-12 place-items-center rounded-full border border-white/25 bg-black/45 text-white backdrop-blur-md transition group-hover:scale-105">
-            <Play size={18} className="ml-0.5 fill-current" />
-          </span>
-        </div>
-      ) : null}
-      <div className="absolute left-4 bottom-2">
-        <TypeBadge spec={spec} overlay />
-      </div>
-      {cornerLabel ? (
-        <span className="absolute right-4 bottom-2.5 text-[11.5px] font-medium text-stone-700 dark:text-white/80">
-          {cornerLabel}
-        </span>
-      ) : null}
-      <div className="absolute right-2.5 top-2.5">
-        <Kebab overlay onClick={(e) => { e.stopPropagation(); onKebab?.(); }} />
-      </div>
-    </div>
-  );
-}
+/**
+ * Pinterest-style cards, shared with the mobile app: the picture does the
+ * talking. Each card is a rounded tile — the thumbnail, or a designed
+ * stand-in when there isn't one — with a small type tag on it, and at most
+ * a two-line heading below. Summaries, tags and dates live in the modal.
+ */
 
 /* ------------------------------------------------------------------ */
 /* Brand marks (Lucide dropped brand icons)                            */
@@ -249,32 +69,280 @@ const YTIcon = (p: MarkProps) => <YouTubeMark {...p} />;
 const GHIcon = (p: MarkProps) => <GitHubMark {...p} />;
 
 /* ------------------------------------------------------------------ */
-/* Per-type badge specs                                                */
+/* Type tags                                                           */
 /* ------------------------------------------------------------------ */
 
-const ARTICLE: BadgeSpec = { label: "Article", Icon: Newspaper, chip: "bg-indigo-500 text-white" };
-const YOUTUBE: BadgeSpec = { label: "YouTube", Icon: YTIcon, chip: "bg-[#ff0033] text-white" };
-const IMAGE: BadgeSpec = { label: "Image", Icon: ImageIcon, chip: "bg-emerald-500 text-white" };
-const NOTE: BadgeSpec = { label: "Note", Icon: StickyNote, chip: "bg-violet-500 text-white" };
-const LINK: BadgeSpec = { label: "Link", Icon: Link2, chip: "bg-sky-500 text-white" };
-const PENDING: BadgeSpec = { label: "Saving…", Icon: (p) => <LoaderCircle {...p} className="animate-spin" />, chip: "bg-stone-200 text-stone-500 dark:bg-white/[0.08] dark:text-[#b4b4bf]" };
-const FAILED: BadgeSpec = { label: "Couldn't save", Icon: TriangleAlert, chip: "bg-amber-500 text-white" };
+type TagSpec = {
+  label: string;
+  Icon: ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
+  chip: string;
+};
 
-function instagramSpec(item: Card): BadgeSpec {
-  const kind = embedString(item.embedJson, "kind");
-  return {
-    label: kind === "reel" ? "Reel" : "Post",
-    Icon: IGIcon,
-    chip: "bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] text-white",
-  };
+const ARTICLE: TagSpec = { label: "Article", Icon: Newspaper, chip: "bg-indigo-500 text-white" };
+const IMAGE: TagSpec = { label: "Image", Icon: ImageIcon, chip: "bg-emerald-500 text-white" };
+const NOTE: TagSpec = { label: "Note", Icon: StickyNote, chip: "bg-violet-500 text-white" };
+const LINK: TagSpec = { label: "Link", Icon: Link2, chip: "bg-sky-500 text-white" };
+const TWEET: TagSpec = { label: "Post", Icon: (p) => <XMark {...p} size={10} />, chip: "bg-black text-white dark:bg-white dark:text-black" };
+const GITHUB: TagSpec = { label: "GitHub", Icon: GHIcon, chip: "bg-[#24292f] text-white" };
+const PENDING: TagSpec = { label: "Saving…", Icon: (p) => <LoaderCircle {...p} className="animate-spin" />, chip: "bg-white/25 text-white" };
+const FAILED: TagSpec = { label: "Couldn't save", Icon: TriangleAlert, chip: "bg-amber-500 text-white" };
+
+function specFor(item: Card): TagSpec {
+  if (item.status === "pending") return PENDING;
+  if (item.status === "failed") return FAILED;
+  switch (item.type) {
+    case "instagram":
+      return {
+        label: embedString(item.embedJson, "kind") === "reel" ? "Reel" : "Post",
+        Icon: IGIcon,
+        chip: "bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] text-white",
+      };
+    case "youtube":
+      return {
+        label: embedString(item.embedJson, "kind") === "short" ? "Short" : "YouTube",
+        Icon: YTIcon,
+        chip: "bg-[#ff0033] text-white",
+      };
+    case "document": {
+      const format = (embedString(item.embedJson, "format") ?? item.sourceDomain ?? "file").toLowerCase();
+      if (format === "pdf") return { label: "PDF", Icon: FileText, chip: "bg-red-500 text-white" };
+      if (format === "xlsx" || format === "csv") return { label: format.toUpperCase(), Icon: FileSpreadsheet, chip: "bg-emerald-600 text-white" };
+      if (format === "pptx") return { label: "Slides", Icon: Presentation, chip: "bg-orange-500 text-white" };
+      return { label: format.toUpperCase(), Icon: FileText, chip: "bg-blue-500 text-white" };
+    }
+    case "tweet":
+      return TWEET;
+    case "note":
+      return NOTE;
+    case "image":
+      return IMAGE;
+    case "link":
+      return LINK;
+    case "github":
+      return GITHUB;
+    default:
+      return ARTICLE;
+  }
 }
 
-function documentSpec(item: Card): BadgeSpec {
-  const format = (embedString(item.embedJson, "format") ?? item.sourceDomain ?? "file").toLowerCase();
-  if (format === "pdf") return { label: "PDF", Icon: FileText, chip: "bg-red-500 text-white" };
-  if (format === "xlsx" || format === "csv") return { label: format.toUpperCase(), Icon: FileSpreadsheet, chip: "bg-emerald-600 text-white" };
-  if (format === "pptx") return { label: "Slides", Icon: Presentation, chip: "bg-orange-500 text-white" };
-  return { label: format.toUpperCase(), Icon: FileText, chip: "bg-blue-500 text-white" };
+/** The small pill that says what a card is. Dark glass over pictures. */
+function Tag({ spec, onSurface }: { spec: TagSpec; onSurface?: boolean }) {
+  const { label, Icon, chip } = spec;
+  return (
+    <span
+      className={`inline-flex max-w-full items-center gap-1.5 rounded-full py-[3px] pl-[3px] pr-2.5 text-[11.5px] font-semibold ${
+        onSurface
+          ? "bg-white/80 text-stone-700 ring-1 ring-black/[0.05] dark:bg-white/[0.08] dark:text-[#e4e4e7] dark:ring-0"
+          : "bg-black/45 text-white backdrop-blur-md"
+      }`}
+    >
+      <span className={`grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full ${chip}`}>
+        <Icon size={10} strokeWidth={2.5} />
+      </span>
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
+function TagSlot({ spec }: { spec: TagSpec }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-2 bottom-2 flex">
+      <Tag spec={spec} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Tiles                                                               */
+/* ------------------------------------------------------------------ */
+
+const TILE = "relative overflow-hidden rounded-2xl bg-stone-200/70 dark:bg-white/[0.05]";
+
+const HUES = [
+  "from-violet-500 to-fuchsia-500",
+  "from-sky-500 to-indigo-500",
+  "from-emerald-500 to-teal-500",
+  "from-amber-500 to-orange-500",
+  "from-rose-500 to-pink-500",
+  "from-cyan-500 to-blue-500",
+];
+
+function hueFor(seed: string) {
+  let h = 0;
+  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return HUES[h % HUES.length];
+}
+
+/** Portrait-leaning, like Pinterest — but never a sliver or a banner. */
+function imageAspect(item: Card): number {
+  const s = saneThumb(item.thumbWidth, item.thumbHeight);
+  if (s) return Math.max(0.66, Math.min(s.w / s.h, 1.5));
+  if (item.type === "youtube") return embedString(item.embedJson, "kind") === "short" ? 9 / 16 : 16 / 9;
+  if (item.type === "instagram") return 4 / 5;
+  return 1;
+}
+
+function isVideo(item: Card) {
+  return (
+    item.type === "youtube" ||
+    (item.type === "instagram" && embedString(item.embedJson, "kind") === "reel") ||
+    (item.type === "tweet" && ["video", "gif"].includes(embedString(item.embedJson, "mediaType") ?? ""))
+  );
+}
+
+function ImageTile({ item, spec }: { item: Card; spec: TagSpec }) {
+  return (
+    <div className={TILE} style={{ aspectRatio: imageAspect(item) }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={item.thumbnailUrl}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+      />
+      {/* A soft floor so the tag reads on bright photos. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/35 to-transparent" />
+      {isVideo(item) ? (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-black/45 text-white ring-1 ring-white/30 backdrop-blur-md">
+            <Play size={17} className="ml-0.5" fill="currentColor" />
+          </span>
+        </div>
+      ) : null}
+      <TagSlot spec={spec} />
+    </div>
+  );
+}
+
+const BULLET_RE = /^([-*•]|\d+[.)])\s+/;
+
+function NoteTile({ item, spec }: { item: Card; spec: TagSpec }) {
+  const body = (item.preview ?? "")
+    .split(/\r?\n/)
+    .map((l) => l.trim().replace(BULLET_RE, "• "))
+    .filter(Boolean)
+    .join("\n");
+  return (
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-50 via-violet-50 to-white p-3.5 ring-1 ring-indigo-200/70 dark:from-[#1f1d33] dark:via-[#1b1a27] dark:to-[#17171d] dark:ring-[#2f2c4a]">
+      <Tag spec={spec} onSurface />
+      <p className="mt-3 line-clamp-[8] whitespace-pre-line font-serif text-[17px] leading-snug text-stone-700 dark:text-[#e4e4e7]">
+        {body || item.title || "Empty note"}
+      </p>
+    </div>
+  );
+}
+
+function TweetTile({ item }: { item: Card }) {
+  const handle = (embedString(item.embedJson, "handle") ?? item.author ?? "").replace(/^@/, "");
+  return (
+    <div className="relative overflow-hidden rounded-2xl bg-white p-3.5 ring-1 ring-stone-200/80 dark:bg-[#17171d] dark:ring-white/[0.06]">
+      <div className="flex items-center gap-2">
+        <span
+          className={`grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gradient-to-br ${hueFor(handle || "x")} text-[11px] font-semibold uppercase text-white`}
+          aria-hidden
+        >
+          {handle.slice(0, 1) || "?"}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[12.5px] text-stone-500 dark:text-[#8b8b94]">@{handle || "post"}</span>
+        <XMark size={12} className="text-stone-400 dark:text-[#8b8b94]" />
+      </div>
+      <p className="mt-2.5 line-clamp-[7] text-[14.5px] leading-snug text-stone-700 dark:text-[#e4e4e7]">
+        {item.preview ?? item.title}
+      </p>
+    </div>
+  );
+}
+
+/** Articles and links that came without a picture. */
+function CoverTile({ item, spec }: { item: Card; spec: TagSpec }) {
+  const domain = item.sourceDomain ?? (item.url ? domainOf(item.url) : undefined) ?? spec.label;
+  return (
+    <div className={`relative flex aspect-square flex-col justify-center overflow-hidden rounded-2xl bg-gradient-to-br ${hueFor(domain)} p-4`}>
+      <span className="font-serif text-[64px] italic leading-none text-white/90">{domain.slice(0, 1).toUpperCase()}</span>
+      <span className="mb-6 mt-1 truncate text-[13px] font-semibold text-white/85">{domain}</span>
+      <TagSlot spec={spec} />
+    </div>
+  );
+}
+
+const COVER_TONE: Record<string, string> = {
+  pdf: "from-[#3b2f7a] via-[#1f1a3f] to-[#0e0d1c]",
+  docx: "from-[#1e3a8a] via-[#172554] to-[#0b1024]",
+  xlsx: "from-[#065f46] via-[#064e3b] to-[#0a1f1a]",
+  csv: "from-[#065f46] via-[#064e3b] to-[#0a1f1a]",
+  pptx: "from-[#9a3412] via-[#5a1d0a] to-[#1f0d06]",
+};
+
+/** A stack of pages with the document's first heading on the top sheet. */
+function DocumentTile({ item, spec }: { item: Card; spec: TagSpec }) {
+  const format = (embedString(item.embedJson, "format") ?? item.sourceDomain ?? "").toLowerCase();
+  const tone = COVER_TONE[format] ?? "from-[#334155] via-[#1e293b] to-[#0b1220]";
+  return (
+    <div className={`${TILE} px-5 pb-11 pt-4`}>
+      <div className="relative mx-auto aspect-[4/5] max-w-[220px]">
+        <div className="absolute inset-x-3 inset-y-0 translate-x-1 translate-y-2.5 rotate-[2.5deg] rounded-md bg-stone-300/80 dark:bg-white/[0.10]" />
+        <div className="absolute inset-x-1.5 inset-y-0 translate-x-0.5 translate-y-1 -rotate-[1deg] rounded-md bg-stone-200 dark:bg-white/[0.16]" />
+        <div className={`absolute inset-0 overflow-hidden rounded-md bg-gradient-to-br ${tone} shadow-[0_10px_30px_-12px_rgba(0,0,0,0.55)]`}>
+          {item.thumbnailUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={item.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover object-top" />
+          ) : (
+            <p className="absolute inset-x-0 bottom-0 line-clamp-4 p-3 font-serif text-[17px] leading-tight text-white">
+              {coverHeading(item)}
+            </p>
+          )}
+        </div>
+      </div>
+      <TagSlot spec={spec} />
+    </div>
+  );
+}
+
+function GitHubTile({ item }: { item: Card }) {
+  const e = item.embedJson;
+  const owner = embedString(e, "owner") ?? item.author?.replace(/^@/, "") ?? "";
+  const repo = embedString(e, "repo");
+  const stars = embedNumber(e, "stars");
+  const language = embedString(e, "language");
+  return (
+    <div className="relative flex min-h-[130px] flex-col gap-2.5 overflow-hidden rounded-2xl bg-[#24292f] p-3.5 text-white">
+      <div className="flex items-center gap-2">
+        {item.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.thumbnailUrl} alt="" loading="lazy" className="h-6 w-6 rounded-md object-cover" />
+        ) : (
+          <span className={`grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br ${hueFor(owner || "gh")} text-[11px] font-semibold uppercase`}>
+            {owner.slice(0, 1) || "?"}
+          </span>
+        )}
+        <span className="min-w-0 flex-1 truncate text-[12.5px] text-white/70">{owner}</span>
+      </div>
+      <p className="line-clamp-2 font-mono text-[15px] font-semibold leading-snug">{repo ?? item.title ?? "GitHub"}</p>
+      <div className="mt-auto flex items-center gap-3 text-[12px] text-white/70">
+        {stars !== undefined ? (
+          <span className="inline-flex items-center gap-1">
+            <Star size={12} fill="currentColor" />
+            {compact(stars)}
+          </span>
+        ) : null}
+        {language ? <span>{language}</span> : null}
+        <GitHubMark size={16} className="ml-auto text-white/80" />
+      </div>
+    </div>
+  );
+}
+
+function StatusTile({ item, spec }: { item: Card; spec: TagSpec }) {
+  return (
+    <div className={`${TILE} flex aspect-square flex-col items-center justify-center gap-2 pb-6 ${item.status === "pending" ? "mv-shimmer" : ""}`}>
+      {item.status === "failed" ? <TriangleAlert size={24} className="text-stone-400 dark:text-[#8b8b94]" /> : null}
+      <span className="max-w-[80%] truncate text-[13px] text-stone-500 dark:text-[#8b8b94]">
+        {item.url ? (domainOf(item.url) ?? item.url) : "Memory"}
+      </span>
+      <TagSlot spec={spec} />
+    </div>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -288,599 +356,104 @@ export function ItemCard({
   item: Card;
   onOpen?: (item: Card) => void;
 }) {
-  const open = onOpen ? () => onOpen(item) : undefined;
-
-  if (item.status === "pending") {
-    return (
-      <Shell item={item} onOpen={onOpen}>
-        <Header spec={PENDING} onKebab={open} />
-        <div className="px-4 pb-4 pt-3">
-          <div className="mv-shimmer h-3.5 w-3/4 rounded" />
-          <div className="mv-shimmer mt-2.5 h-3 w-full rounded" />
-          <div className="mv-shimmer mt-2 h-3 w-5/6 rounded" />
-          <div className="mt-4 flex gap-1.5">
-            <div className="mv-shimmer h-5 w-14 rounded-full" />
-            <div className="mv-shimmer h-5 w-16 rounded-full" />
-          </div>
-          {item.url ? (
-            <p className={`mt-3 truncate ${META}`}>{domainOf(item.url) ?? item.url}</p>
-          ) : null}
-        </div>
-      </Shell>
-    );
-  }
-
-  if (item.status === "failed") {
-    return (
-      <Shell item={item} onOpen={onOpen} className="border-dashed">
-        <Header spec={FAILED} onKebab={open} />
-        <div className="px-4 pb-4 pt-3">
-          <p className={`${TITLE} line-clamp-2`}>{item.title ?? item.url ?? "Unknown item"}</p>
-          {item.title && item.url ? (
-            <p className={`mt-1 truncate ${BODY}`}>{item.url}</p>
-          ) : null}
-          <Footer left={item.sourceDomain} savedAt={item.savedAt} />
-        </div>
-      </Shell>
-    );
-  }
-
-  switch (item.type) {
-    case "tweet":
-      return <TweetCard item={item} onOpen={onOpen} />;
-    case "instagram":
-      return <MediaCard item={item} onOpen={onOpen} spec={instagramSpec(item)} play={embedString(item.embedJson, "kind") === "reel"} />;
-    case "youtube":
-      return <MediaCard item={item} onOpen={onOpen} spec={{ ...YOUTUBE, label: embedString(item.embedJson, "kind") === "short" ? "Short" : "YouTube" }} play showAuthor />;
-    case "image":
-      return <ImageCard item={item} onOpen={onOpen} />;
-    case "note":
-      return <NoteCard item={item} onOpen={onOpen} />;
-    case "link":
-      return <LinkCard item={item} onOpen={onOpen} />;
-    case "document":
-      return <DocumentCard item={item} onOpen={onOpen} />;
-    case "github":
-      return <GitHubCard item={item} onOpen={onOpen} />;
-    case "article":
-    default:
-      return <ArticleCard item={item} onOpen={onOpen} />;
-  }
-}
-
-type Props = { item: Card; onOpen?: (item: Card) => void };
-
-function ArticleCard({ item, onOpen }: Props) {
-  const open = onOpen ? () => onOpen(item) : undefined;
-  const description = item.summary ?? item.preview;
-  const siteName = embedString(item.embedJson, "siteName");
-  return (
-    <Shell item={item} onOpen={onOpen}>
-      {item.thumbnailUrl ? (
-        <Media item={item} spec={ARTICLE} cornerLabel={readTime(item)} onKebab={open} />
-      ) : (
-        <Header spec={ARTICLE} onKebab={open} />
-      )}
-      <div className={item.thumbnailUrl ? "px-4 pb-4 pt-2" : "px-4 pb-4 pt-3"}>
-        {item.title ? <h2 className={`${TITLE} line-clamp-2`}>{item.title}</h2> : null}
-        {description ? (
-          <p className={`${BODY} mt-1.5 line-clamp-3`}>{description}</p>
-        ) : null}
-        <Tags tags={item.tags ?? []} />
-        <Footer left={siteName ?? item.sourceDomain} savedAt={item.savedAt} />
-      </div>
-    </Shell>
-  );
-}
-
-function TweetCard({ item, onOpen }: Props) {
-  const open = onOpen ? () => onOpen(item) : undefined;
-  const handle = (embedString(item.embedJson, "handle") ?? item.author ?? "").replace(/^@/, "");
-  const likes = embedNumber(item.embedJson, "likes");
-  const retweets = embedNumber(item.embedJson, "retweets");
-  const quote = tweetQuote(item);
-  const text = item.preview ?? item.title;
-  return (
-    <Shell item={item} onOpen={onOpen}>
-      <div className="flex items-center justify-between px-4 pt-3.5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <Avatar seed={handle || "x"} />
-          <div className="min-w-0 leading-tight">
-            <p className="flex items-center gap-1.5 text-[13px] font-semibold text-stone-900 dark:text-[#f1f1f4]">
-              <span className="truncate">{displayName(handle)}</span>
-              <XMark size={11} className="shrink-0 text-stone-400 dark:text-[#8a8a96]" />
-            </p>
-            <p className={`truncate ${META}`}>@{handle}</p>
-          </div>
-        </div>
-        <span className={`ml-3 shrink-0 ${META}`}>{timeAgo(item.savedAt)}</span>
-      </div>
-      <div className="px-4 pb-4 pt-3">
-        {text ? (
-          <p className="line-clamp-6 whitespace-pre-line text-[14px] leading-relaxed text-stone-800 dark:text-[#e6e6ea]">
-            {text}
-          </p>
-        ) : null}
-        {item.thumbnailUrl ? (
-          <div className="relative mt-3 overflow-hidden rounded-xl border border-stone-200/70 dark:border-white/[0.06]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={item.thumbnailUrl}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              className="max-h-[280px] w-full object-cover dark:brightness-[0.92]"
-              style={aspect(item)}
-            />
-            {embedString(item.embedJson, "mediaType") === "video" ||
-            embedString(item.embedJson, "mediaType") === "gif" ? (
-              <span className="absolute inset-0 grid place-items-center">
-                <span className="grid h-11 w-11 place-items-center rounded-full border border-white/25 bg-black/45 text-white backdrop-blur-md">
-                  <Play size={16} className="ml-0.5 fill-current" />
-                </span>
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-        {quote ? (
-          <div className="mt-3 rounded-xl border border-stone-200/80 bg-stone-50 p-3 dark:border-white/[0.06] dark:bg-white/[0.03]">
-            <p className="flex items-center gap-1.5 text-[12px] font-semibold text-stone-800 dark:text-[#e6e6ea]">
-              <span className="truncate">{quote.name ?? quote.handle}</span>
-              {quote.handle ? (
-                <span className="truncate font-normal text-stone-400 dark:text-[#6e6e7a]">@{quote.handle}</span>
-              ) : null}
-            </p>
-            {quote.text ? (
-              <p className="mt-1 line-clamp-3 text-[12.5px] leading-relaxed text-stone-600 dark:text-[#a3a3ae]">
-                {quote.text}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-        {likes !== undefined || retweets !== undefined ? (
-          <div className="mt-3 flex items-center gap-5 text-[12px] text-stone-400 dark:text-[#7c7c88]">
-            {retweets !== undefined ? (
-              <span className="inline-flex items-center gap-1.5"><Repeat2 size={15} />{compact(retweets)}</span>
-            ) : null}
-            {likes !== undefined ? (
-              <span className="inline-flex items-center gap-1.5"><Heart size={14} />{compact(likes)}</span>
-            ) : null}
-          </div>
-        ) : null}
-        <div className="flex items-end justify-between gap-2">
-          <Tags tags={item.tags ?? []} />
-          <span className="-mb-1 -mr-1.5 mt-3 shrink-0"><Kebab onClick={(e) => { e.stopPropagation(); open?.(); }} /></span>
-        </div>
-      </div>
-    </Shell>
-  );
-}
-
-function MediaCard({
-  item,
-  onOpen,
-  spec,
-  play,
-  showAuthor,
-}: Props & { spec: BadgeSpec; play?: boolean; showAuthor?: boolean }) {
-  const open = onOpen ? () => onOpen(item) : undefined;
-  const author = item.author?.replace(/^@/, "");
-  return (
-    <Shell item={item} onOpen={onOpen}>
-      {item.thumbnailUrl ? (
-        <Media item={item} spec={spec} play={play} onKebab={open} />
-      ) : (
-        <Header spec={spec} onKebab={open} />
-      )}
-      <div className={item.thumbnailUrl ? "px-4 pb-4 pt-2" : "px-4 pb-4 pt-3"}>
-        {item.title ? <h2 className={`${TITLE} line-clamp-2`}>{item.title}</h2> : null}
-        {author ? (
-          showAuthor ? (
-            <p className="mt-2 flex items-center gap-2 text-[12.5px] text-stone-500 dark:text-[#a3a3ae]">
-              <Avatar seed={author} size={20} />
-              <span className="truncate">{author}</span>
-            </p>
-          ) : (
-            <p className={`mt-1 ${META}`}>@{author}</p>
-          )
-        ) : null}
-        {!item.title && item.preview ? (
-          <p className={`${BODY} line-clamp-3`}>{item.preview}</p>
-        ) : null}
-        <Tags tags={item.tags ?? []} />
-        <Footer left={item.sourceDomain} savedAt={item.savedAt} />
-      </div>
-    </Shell>
-  );
-}
-
-function ImageCard({ item, onOpen }: Props) {
-  const open = onOpen ? () => onOpen(item) : undefined;
-  const caption = item.summary ?? item.preview;
-  return (
-    <Shell item={item} onOpen={onOpen}>
-      {item.thumbnailUrl ? (
-        <Media item={item} spec={IMAGE} maxH="max-h-[420px]" onKebab={open} />
-      ) : (
-        <Header spec={IMAGE} onKebab={open} />
-      )}
-      <div className={item.thumbnailUrl ? "px-4 pb-4 pt-2" : "px-4 pb-4 pt-3"}>
-        {item.title ? <h2 className={`${TITLE} line-clamp-2`}>{item.title}</h2> : null}
-        {caption ? <p className={`${BODY} mt-1 line-clamp-2`}>{caption}</p> : null}
-        <Tags tags={item.tags ?? []} />
-        <Footer left={item.sourceDomain} savedAt={item.savedAt} />
-      </div>
-    </Shell>
-  );
-}
-
-function NoteCard({ item, onOpen }: Props) {
-  const open = onOpen ? () => onOpen(item) : undefined;
-  const body = item.preview?.trim() ?? "";
-  const lines = body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const bulletRe = /^([-*•]|\d+[.)])\s+/;
-  const bullets = lines.filter((l) => bulletRe.test(l));
-  const asList = lines.length >= 2 && bullets.length >= Math.ceil(lines.length / 2);
-  // Notes without an explicit title use their first line as one.
-  const title = item.title ?? (asList ? undefined : lines[0]);
-  const rest = !item.title && !asList ? lines.slice(1).join(" ") : asList ? undefined : body;
-  return (
-    <Shell
-      item={item}
-      onOpen={onOpen}
-      className="border-indigo-200/70 bg-gradient-to-br from-indigo-50 via-violet-50/70 to-white hover:border-indigo-300 dark:border-indigo-300/15 dark:from-[#27274d] dark:via-[#222247] dark:to-[#1c1c3a] dark:hover:border-indigo-300/30 dark:hover:from-[#2b2b54] dark:hover:via-[#25254d] dark:hover:to-[#1f1f40]"
-    >
-      <Header spec={NOTE} onKebab={open} />
-      <div className="px-4 pb-4 pt-3">
-        {title ? <h2 className={`${TITLE} line-clamp-2`}>{title}</h2> : null}
-        {asList ? (
-          <ul className="mt-2 space-y-1">
-            {lines.slice(0, 6).map((l, i) => (
-              <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-stone-600 dark:text-[#c3c3d6]">
-                <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400/80" />
-                <span className="line-clamp-1">{l.replace(bulletRe, "")}</span>
-              </li>
-            ))}
-          </ul>
-        ) : rest ? (
-          <p className={`mt-1.5 line-clamp-5 whitespace-pre-line text-[13px] leading-relaxed text-stone-600 dark:text-[#c3c3d6]`}>
-            {rest}
-          </p>
-        ) : null}
-        <Tags tags={item.tags ?? []} />
-        <Footer savedAt={item.savedAt} />
-      </div>
-    </Shell>
-  );
-}
-
-function LinkCard({ item, onOpen }: Props) {
-  const open = onOpen ? () => onOpen(item) : undefined;
-  const description = item.summary ?? item.preview;
-  return (
-    <Shell item={item} onOpen={onOpen}>
-      <Header spec={LINK} onKebab={open} />
-      <div className="px-4 pb-4 pt-3">
-        {item.title ? <h2 className={`${TITLE} line-clamp-2`}>{item.title}</h2> : null}
-        {description ? <p className={`${BODY} mt-1.5 line-clamp-2`}>{description}</p> : null}
-        {item.thumbnailUrl ? (
-          <div className="mt-3 overflow-hidden rounded-xl border border-stone-200/70 dark:border-white/[0.06]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={item.thumbnailUrl}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              className="h-28 w-full object-cover dark:brightness-[0.92]"
-            />
-          </div>
-        ) : null}
-        <Tags tags={item.tags ?? []} />
-        <Footer left={item.sourceDomain} savedAt={item.savedAt} />
-      </div>
-    </Shell>
-  );
-}
-
-function DocumentCard({ item, onOpen }: Props) {
-  const open = onOpen ? () => onOpen(item) : undefined;
-  const spec = documentSpec(item);
-  const filename = embedString(item.embedJson, "filename");
-  const title = item.title ?? filename?.replace(/\.[a-z0-9]+$/i, "");
-  const meta = [
-    pluralize(embedNumber(item.embedJson, "pages"), "page"),
-    formatBytes(embedNumber(item.embedJson, "bytes")),
-    !embedNumber(item.embedJson, "pages") ? pluralize(embedNumber(item.embedJson, "words"), "word") : undefined,
-    timeAgo(item.savedAt),
-  ].filter(Boolean);
-  return (
-    <Shell item={item} onOpen={onOpen}>
-      <Header spec={spec} onKebab={open} />
-      <DocumentCover item={item} spec={spec} />
-      <div className="px-4 pb-4 pt-3">
-        {title ? (
-          <h2 className="line-clamp-2 font-serif text-[19px] leading-snug tracking-[-0.005em] text-stone-900 dark:text-[#f1f1f4]">
-            {title}
-          </h2>
-        ) : null}
-        <p className={`mt-1.5 ${META}`}>{meta.join("  ·  ")}</p>
-        <Tags tags={item.tags ?? []} />
-      </div>
-    </Shell>
-  );
-}
-
-const COVER_TONE: Record<string, string> = {
-  pdf: "from-[#3b2f7a] via-[#1f1a3f] to-[#0e0d1c]",
-  docx: "from-[#1e3a8a] via-[#172554] to-[#0b1024]",
-  xlsx: "from-[#065f46] via-[#064e3b] to-[#0a1f1a]",
-  csv: "from-[#065f46] via-[#064e3b] to-[#0a1f1a]",
-  pptx: "from-[#9a3412] via-[#5a1d0a] to-[#1f0d06]",
-};
-
-/**
- * A stack of pages with the document's first heading typeset on the top
- * sheet. Uses a rendered first page when the pipeline stores one.
- */
-function DocumentCover({ item, spec }: { item: Card; spec: BadgeSpec }) {
-  const format = (embedString(item.embedJson, "format") ?? item.sourceDomain ?? "").toLowerCase();
-  const tone = COVER_TONE[format] ?? "from-[#334155] via-[#1e293b] to-[#0b1220]";
-  const { heading, kicker } = coverText(item);
-  return (
-    <div className="px-4 pt-3">
-      <div className="relative aspect-[4/3]">
-        {/* the sheets behind */}
-        <div className="absolute inset-x-3 top-0 bottom-0 translate-x-1.5 translate-y-3.5 rotate-[2.5deg] rounded-lg bg-stone-300/80 shadow-sm dark:bg-white/[0.10]" />
-        <div className="absolute inset-x-1.5 top-0 bottom-0 translate-x-0.5 translate-y-1.5 -rotate-[1deg] rounded-lg bg-stone-200 shadow-sm dark:bg-white/[0.16]" />
-        {/* the top sheet */}
-        <div className={`absolute inset-0 overflow-hidden rounded-lg bg-gradient-to-br ${tone} shadow-[0_10px_30px_-12px_rgba(0,0,0,0.55)] ring-1 ring-black/10 dark:ring-white/10`}>
-          {item.thumbnailUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={item.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover object-top" />
-          ) : (
-            <>
-              <div className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
-              <div className="pointer-events-none absolute -left-8 bottom-0 h-32 w-40 rounded-full bg-white/[0.06] blur-2xl" />
-              <div className="absolute inset-0 flex flex-col justify-end p-4">
-                <p className="font-serif text-[21px] leading-[1.15] text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
-                  {heading}
-                </p>
-                {kicker ? (
-                  <p className="mt-2 line-clamp-2 text-[9px] font-medium uppercase leading-relaxed tracking-[0.18em] text-white/60">
-                    {kicker}
-                  </p>
-                ) : null}
-              </div>
-              <span className="absolute left-4 top-3.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-white/45">
-                {spec.label}
-              </span>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function coverText(item: Card): { heading: string; kicker?: string } {
-  const md = item.preview ?? "";
-  const lines = md.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const firstHeading = lines.find((l) => /^#{1,3}\s+\S/.test(l))?.replace(/^#+\s+/, "");
-  const heading = item.title ?? firstHeading ?? embedString(item.embedJson, "filename") ?? "Document";
-  const para = lines.find((l) => !/^#/.test(l) && !/^[-*>|]/.test(l) && l !== heading && l.length > 20);
-  const kicker = item.summary ?? para;
-  return { heading, kicker: kicker ? kicker.slice(0, 90) : undefined };
-}
-
-function pluralize(n: number | undefined, unit: string): string | undefined {
-  if (!n) return undefined;
-  return `${n.toLocaleString()} ${unit}${n === 1 ? "" : "s"}`;
-}
-
-function formatBytes(n: number | undefined): string | undefined {
-  if (!n) return undefined;
-  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
-  return `${n} B`;
-}
-
-/* ------------------------------------------------------------------ */
-/* GitHub                                                              */
-/* ------------------------------------------------------------------ */
-
-const GH_CHIP = "bg-[#24292f] text-white dark:bg-white dark:text-[#24292f]";
-
-const LANGUAGE_COLORS: Record<string, string> = {
-  TypeScript: "#3178c6", JavaScript: "#f1e05a", Python: "#3572a5", Rust: "#dea584",
-  Go: "#00add8", Java: "#b07219", C: "#555555", "C++": "#f34b7d", "C#": "#178600",
-  Ruby: "#701516", Swift: "#f05138", Kotlin: "#a97bff", Dart: "#00b4ab", Shell: "#89e051",
-  HTML: "#e34c26", CSS: "#663399", PHP: "#4f5d95", Scala: "#c22d40", Elixir: "#6e4a7e",
-  Haskell: "#5e5086", Lua: "#000080", Zig: "#ec915c", Vue: "#41b883", Svelte: "#ff3e00",
-  "Jupyter Notebook": "#da5b0b", "Objective-C": "#438eff", Clojure: "#db5855", R: "#198ce7",
-};
-
-function GitHubCard({ item, onOpen }: Props) {
-  const open = onOpen ? () => onOpen(item) : undefined;
-  const e = item.embedJson;
-  const kind = embedString(e, "kind") ?? "repo";
-  const owner = embedString(e, "owner") ?? item.author?.replace(/^@/, "") ?? "";
-  const repo = embedString(e, "repo");
-  const spec: BadgeSpec = {
-    label: kind === "issue" ? "Issue" : kind === "pull" ? "Pull request" : kind === "user" ? "Profile" : "GitHub",
-    Icon: GHIcon,
-    chip: GH_CHIP,
-  };
-  const avatar = item.thumbnailUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={item.thumbnailUrl}
-      alt=""
-      loading="lazy"
-      decoding="async"
-      className={`h-8 w-8 shrink-0 object-cover ring-1 ring-black/5 dark:ring-white/10 ${kind === "user" ? "rounded-full" : "rounded-lg"}`}
-    />
-  ) : (
-    <Avatar seed={owner || "gh"} size={32} />
-  );
-
-  let body: ReactNode;
-  if (kind === "issue" || kind === "pull") {
-    const state = embedString(e, "state") ?? "open";
-    const number = embedNumber(e, "number");
-    const comments = embedNumber(e, "comments");
-    const additions = embedNumber(e, "additions");
-    const deletions = embedNumber(e, "deletions");
-    const stateCls =
-      state === "merged"
-        ? "bg-violet-500/15 text-violet-600 dark:text-violet-300"
-        : state === "closed"
-          ? "bg-rose-500/15 text-rose-600 dark:text-rose-300"
-          : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300";
-    const StateIcon = kind === "pull" ? (state === "merged" ? GitMerge : GitPullRequest) : CircleDot;
-    body = (
-      <>
-        <div className="flex items-center gap-2.5">
-          {avatar}
-          <div className="min-w-0 leading-tight">
-            <p className="truncate text-[12.5px] text-stone-500 dark:text-[#9a9aa6]">
-              {embedString(e, "fullName") ?? `${owner}/${repo ?? ""}`}
-              {number ? <span className="text-stone-400 dark:text-[#6e6e7a]"> #{number}</span> : null}
-            </p>
-            <p className={`truncate ${META}`}>{item.author ?? owner}</p>
-          </div>
-        </div>
-        <div className="mt-3 flex items-start gap-2">
-          <span className={`mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold capitalize ${stateCls}`}>
-            <StateIcon size={11} strokeWidth={2.5} />
-            {state}
-          </span>
-          {item.title ? <h2 className={`${TITLE} line-clamp-2`}>{item.title}</h2> : null}
-        </div>
-        {item.summary ?? item.preview ? (
-          <p className={`${BODY} mt-1.5 line-clamp-2`}>{item.summary ?? item.preview}</p>
-        ) : null}
-        <div className="mt-3 flex items-center gap-4 text-[12px] text-stone-400 dark:text-[#7c7c88]">
-          {comments !== undefined ? (
-            <span className="inline-flex items-center gap-1.5"><MessageSquare size={13} />{compact(comments)}</span>
-          ) : null}
-          {additions !== undefined || deletions !== undefined ? (
-            <span className="inline-flex items-center gap-1.5 font-medium">
-              <span className="text-emerald-500">+{compact(additions ?? 0)}</span>
-              <span className="text-rose-500">−{compact(deletions ?? 0)}</span>
-            </span>
-          ) : null}
-        </div>
-      </>
-    );
-  } else if (kind === "user") {
-    const followers = embedNumber(e, "followers");
-    const repos = embedNumber(e, "publicRepos");
-    body = (
-      <>
-        <div className="flex items-center gap-3">
-          {avatar}
-          <div className="min-w-0 leading-tight">
-            <h2 className={`${TITLE} truncate`}>{item.title ?? owner}</h2>
-            <p className={`truncate ${META}`}>@{owner}</p>
-          </div>
-        </div>
-        {embedString(e, "bio") ? <p className={`${BODY} mt-2.5 line-clamp-2`}>{embedString(e, "bio")}</p> : null}
-        <div className="mt-3 flex items-center gap-4 text-[12px] text-stone-400 dark:text-[#7c7c88]">
-          {followers !== undefined ? (
-            <span className="inline-flex items-center gap-1.5"><Users size={13} />{compact(followers)} followers</span>
-          ) : null}
-          {repos !== undefined ? <span>{compact(repos)} repos</span> : null}
-        </div>
-      </>
-    );
+  const spec = specFor(item);
+  let tile: ReactNode;
+  // Text-led tiles already show their words; a heading below would repeat.
+  let showHeading = true;
+  if (item.status !== "ready") {
+    tile = <StatusTile item={item} spec={spec} />;
+  } else if (item.type === "note") {
+    tile = <NoteTile item={item} spec={spec} />;
+    showHeading = !!item.title && !(item.preview ?? "").startsWith(item.title);
+  } else if (item.type === "document") {
+    tile = <DocumentTile item={item} spec={spec} />;
+    // Without a rendered page the cover already carries the title.
+    showHeading = !!item.thumbnailUrl;
+  } else if (item.type === "github") {
+    tile = <GitHubTile item={item} />;
+    showHeading = false;
+  } else if (item.thumbnailUrl) {
+    tile = <ImageTile item={item} spec={spec} />;
+  } else if (item.type === "tweet") {
+    tile = <TweetTile item={item} />;
+    showHeading = false;
   } else {
-    const stars = embedNumber(e, "stars");
-    const forks = embedNumber(e, "forks");
-    const language = embedString(e, "language");
-    const description = embedString(e, "description") ?? item.summary ?? item.preview;
-    const path = embedString(e, "path");
-    body = (
-      <>
-        <div className="flex items-center gap-2.5">
-          {avatar}
-          <h2 className={`${TITLE} min-w-0 truncate`}>
-            <span className="font-normal text-stone-500 dark:text-[#9a9aa6]">{owner}/</span>
-            {repo ?? item.title}
-          </h2>
-        </div>
-        {path ? (
-          <p className={`mt-2 truncate rounded-md bg-stone-100 px-2 py-1 font-mono text-[11px] text-stone-500 dark:bg-white/[0.05] dark:text-[#9a9aa6]`}>
-            {path}
-          </p>
-        ) : null}
-        {description ? <p className={`${BODY} mt-2.5 line-clamp-2`}>{description}</p> : null}
-        {stars !== undefined || forks !== undefined || language ? (
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-stone-400 dark:text-[#7c7c88]">
-            {stars !== undefined ? (
-              <span className="inline-flex items-center gap-1.5"><Star size={13} />{compact(stars)}</span>
-            ) : null}
-            {forks !== undefined ? (
-              <span className="inline-flex items-center gap-1.5"><GitFork size={13} />{compact(forks)}</span>
-            ) : null}
-            {language ? (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full ring-1 ring-black/10 dark:ring-white/10" style={{ background: LANGUAGE_COLORS[language] ?? "#8b8b94" }} />
-                {language}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-      </>
-    );
+    tile = <CoverTile item={item} spec={spec} />;
+  }
+
+  const heading =
+    item.type === "tweet"
+      ? (item.preview ?? item.title)
+      : item.type === "document"
+        ? (item.title ?? embedString(item.embedJson, "filename")?.replace(/\.[a-z0-9]+$/i, ""))
+        : (item.title ?? item.preview ?? (item.url ? domainOf(item.url) : undefined));
+
+  function onKeyDown(e: KeyboardEvent<HTMLElement>) {
+    if (!onOpen) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onOpen(item);
+    }
   }
 
   return (
-    <Shell item={item} onOpen={onOpen}>
-      <Header spec={spec} onKebab={open} />
-      <div className="px-4 pb-4 pt-3">
-        {body}
-        <Tags tags={item.tags ?? []} />
-        <Footer left="github.com" savedAt={item.savedAt} />
-      </div>
-    </Shell>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Small helpers                                                       */
-/* ------------------------------------------------------------------ */
-
-const AVATAR_HUES = [
-  "from-violet-500 to-fuchsia-500",
-  "from-sky-500 to-indigo-500",
-  "from-emerald-500 to-teal-500",
-  "from-amber-500 to-orange-500",
-  "from-rose-500 to-pink-500",
-  "from-cyan-500 to-blue-500",
-];
-
-function Avatar({ seed, size = 34 }: { seed: string; size?: number }) {
-  let h = 0;
-  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const grad = AVATAR_HUES[h % AVATAR_HUES.length];
-  return (
-    <span
-      className={`grid shrink-0 place-items-center rounded-full bg-gradient-to-br ${grad} font-semibold uppercase text-white ring-2 ring-white/70 dark:ring-white/10`}
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
-      aria-hidden
+    <article
+      onClick={onOpen ? () => onOpen(item) : undefined}
+      onKeyDown={onKeyDown}
+      role={onOpen ? "button" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      aria-label={cardLabel(item)}
+      className={`group mb-5 break-inside-avoid sm:mb-6 rounded-2xl outline-none transition duration-200 focus-visible:ring-2 focus-visible:ring-stone-400 focus-visible:ring-offset-4 focus-visible:ring-offset-[#fafaf9] dark:focus-visible:ring-[#6b6b75] dark:focus-visible:ring-offset-[#0f0f13] ${
+        onOpen ? "cursor-pointer" : ""
+      }`}
     >
-      {seed.slice(0, 1) || "?"}
-    </span>
+      <div className="transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_36px_-18px_rgba(0,0,0,0.45)] group-active:scale-[0.99] rounded-2xl">
+        {tile}
+      </div>
+      {showHeading && heading ? (
+        <p className="mt-2 line-clamp-2 px-1 text-[14px] font-medium leading-snug text-stone-800 dark:text-[#e4e4e7]">
+          {heading}
+        </p>
+      ) : null}
+    </article>
   );
 }
 
-function displayName(handle: string): string {
-  if (!handle) return "Post";
-  // "sahil_bloom" → "Sahil Bloom"; CamelCase handles get spaced too.
-  return handle
-    .replace(/[_.]+/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+/* ------------------------------------------------------------------ */
+/* Helpers                                                             */
+/* ------------------------------------------------------------------ */
+
+const TYPE_NAMES: Record<Card["type"], string> = {
+  article: "Article",
+  tweet: "Post on X",
+  instagram: "Instagram post",
+  youtube: "YouTube video",
+  image: "Image",
+  note: "Note",
+  link: "Link",
+  document: "Document",
+  github: "GitHub",
+};
+
+/** What a screen reader announces for a card: kind, title, source, age. */
+function cardLabel(item: Card): string {
+  if (item.status === "pending") return `Saving ${item.url ? (domainOf(item.url) ?? "memory") : "memory"}`;
+  const title = item.title ?? item.preview?.slice(0, 120) ?? item.url ?? "Untitled";
+  return [
+    item.status === "failed" ? "Couldn't save" : TYPE_NAMES[item.type],
+    title,
+    item.author ? `by ${item.author.replace(/^@/, "")}` : undefined,
+    item.sourceDomain,
+    `saved ${timeAgo(item.savedAt)}`,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function coverHeading(item: Card): string {
+  const lines = (item.preview ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const firstHeading = lines.find((l) => /^#{1,3}\s+\S/.test(l))?.replace(/^#+\s+/, "");
+  return item.title ?? firstHeading ?? embedString(item.embedJson, "filename") ?? "Document";
 }
 
 function compact(n: number): string {
@@ -889,23 +462,12 @@ function compact(n: number): string {
   return String(n);
 }
 
-function readTime(item: Card): string | undefined {
-  const words = embedNumber(item.embedJson, "wordCount");
-  if (!words) return undefined;
-  return `${Math.max(1, Math.round(words / 220))} min read`;
-}
-
 function domainOf(url: string): string | undefined {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
     return undefined;
   }
-}
-
-function aspect(item: Card) {
-  const s = saneThumb(item.thumbWidth, item.thumbHeight);
-  return s ? { aspectRatio: `${s.w} / ${s.h}` } : undefined;
 }
 
 function embedString(embedJson: unknown, key: string): string | undefined {
@@ -924,27 +486,8 @@ function embedNumber(embedJson: unknown, key: string): number | undefined {
   return undefined;
 }
 
-function tweetQuote(
-  item: Card,
-): { name?: string; handle?: string; text?: string } | undefined {
-  if (item.type !== "tweet" || !item.embedJson || typeof item.embedJson !== "object") return undefined;
-  const q = (item.embedJson as { quote?: unknown }).quote;
-  if (!q || typeof q !== "object") return undefined;
-  const { name, handle, text } = q as { name?: unknown; handle?: unknown; text?: unknown };
-  return {
-    name: typeof name === "string" ? name : undefined,
-    handle: typeof handle === "string" ? handle : undefined,
-    text: typeof text === "string" ? text : undefined,
-  };
-}
-
-function saneThumb(
-  width?: number,
-  height?: number,
-): { w: number; h: number } | undefined {
-  if (!width || !height || width < 1 || height < 1 || width > 8192 || height > 8192) {
-    return undefined;
-  }
+function saneThumb(width?: number, height?: number): { w: number; h: number } | undefined {
+  if (!width || !height || width < 1 || height < 1 || width > 8192 || height > 8192) return undefined;
   return { w: width, h: height };
 }
 
@@ -960,4 +503,3 @@ function timeAgo(savedAt: number): string {
   if (days < 30) return `${Math.floor(days / 7)}w ago`;
   return new Date(savedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
-
