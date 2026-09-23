@@ -1,265 +1,220 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { FlashList } from "@shopify/flash-list";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAction, useQuery } from "convex/react";
-import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "../../lib/backend";
-import type { Card } from "../../lib/types";
-import { ItemCard } from "../../components/item-card";
-import { setCardSeed } from "../../lib/card-seed";
-import { SignIn } from "../../components/sign-in";
-import { colors, fonts, radius } from "../../lib/theme";
-import { CONVEX_URL } from "../../lib/convex-url";
+import { type Card, type ItemType, TYPE_FILTERS } from "../../lib/types";
+import { CardFeed } from "../../components/card-feed";
+import { EmptyState, FilterChip, LargeTitle, SearchField } from "../../components/ui";
+import { pendingAskStore } from "../../lib/vault-filter";
+import { rememberSearch, setPrefs, usePrefs } from "../../lib/prefs";
+import { HIT, type Palette, radius, useStyles, useTheme } from "../../lib/theme";
 
 export default function SearchScreen() {
-  const { isLoading, isAuthenticated } = useConvexAuth();
-
-  if (!CONVEX_URL)
-    return (
-      <Center>
-        <Text style={styles.muted}>Set EXPO_PUBLIC_CONVEX_URL first.</Text>
-      </Center>
-    );
-  if (isLoading)
-    return (
-      <Center>
-        <Text style={styles.muted}>Opening your vault…</Text>
-      </Center>
-    );
-  if (!isAuthenticated) return <SignIn />;
-  return <SearchScreenBody />;
-}
-
-function SearchScreenBody() {
   const router = useRouter();
+  const c = useTheme();
+  const styles = useStyles(makeStyles);
+  const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
+  const { recentSearches } = usePrefs();
   const searchAction = useAction(api.search.search);
+  const inputRef = useRef<TextInput>(null);
+
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<ItemType | undefined>(undefined);
   const [debounced, setDebounced] = useState("");
-  const [results, setResults] = useState<Card[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [touched, setTouched] = useState(false);
+  const [hybrid, setHybrid] = useState<{ key: string; cards: Card[] } | null>(null);
+
+  // Arriving on the tab puts the caret in the field, like Spotlight.
+  useFocusEffect(
+    useCallback(() => {
+      const t = setTimeout(() => inputRef.current?.focus(), 350);
+      return () => clearTimeout(t);
+    }, []),
+  );
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 200);
     return () => clearTimeout(t);
   }, [query]);
 
-  const keywordHits = useQuery(
-    api.search.keyword,
-    debounced.length >= 2 ? { q: debounced } : "skip",
-  );
+  const active = debounced.length >= 2;
+  const key = `${scope ?? "all"}:${debounced}`;
+
+  // Keyword hits are live and instant; semantic results replace them when
+  // they land.
+  const keywordHits = useQuery(api.search.keyword, active ? { q: debounced, type: scope } : "skip") as Card[] | undefined;
 
   useEffect(() => {
-    if (debounced.length < 2) {
-      setResults([]);
-      setBusy(false);
-      return;
-    }
+    if (!active) return;
     let cancelled = false;
-    setBusy(true);
-    void searchAction({ q: debounced })
+    void searchAction({ q: debounced, type: scope })
       .then((r) => {
-        if (!cancelled) setResults(r as Card[]);
+        if (!cancelled) setHybrid({ key, cards: r as Card[] });
       })
       .catch(() => {
-        if (!cancelled) setResults([]);
-      })
-      .finally(() => {
-        if (!cancelled) setBusy(false);
+        if (!cancelled) setHybrid({ key, cards: [] });
       });
     return () => {
       cancelled = true;
     };
-  }, [debounced, searchAction]);
+  }, [active, debounced, scope, key, searchAction]);
 
-  const shown =
-    results.length > 0 ? results : ((keywordHits ?? []) as Card[]);
+  const semantic = hybrid?.key === key ? hybrid.cards : null;
+  const shown = useMemo(() => (active ? (semantic ?? keywordHits ?? []) : []), [active, semantic, keywordHits]);
+  const searching = active && semantic === null;
+  const pending = active && shown.length === 0 && searching;
+  const none = active && shown.length === 0 && !searching;
 
-  const openItem = useCallback(
-    (item: Card) => {
-      setCardSeed(item);
-      router.push({ pathname: "/item/[id]", params: { id: item.id } });
-    },
-    [router],
-  );
+  function run(term: string) {
+    setQuery(term);
+    rememberSearch(term);
+  }
 
-  const renderItem = useCallback(
-    ({ item }: { item: Card }) => (
-      <View style={styles.cell}>
-        <ItemCard item={item} onPress={openItem} />
-      </View>
-    ),
-    [openItem],
-  );
+  function askAbout() {
+    const q = query.trim();
+    if (!q) return;
+    rememberSearch(q);
+    pendingAskStore.set(q);
+    router.navigate("/ask");
+  }
 
-  const listPadding = useMemo(
-    () => ({
-      paddingHorizontal: 10,
-      paddingBottom: tabBarHeight + 24,
-    }),
-    [tabBarHeight],
-  );
-
-  const showEmpty =
-    touched &&
-    debounced.length >= 2 &&
-    !busy &&
-    shown.length === 0 &&
-    keywordHits !== undefined;
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.wordmark}>Search</Text>
-      <View style={styles.inputWrap}>
-        <Ionicons name="search" size={17} color={colors.textFaint} />
-        <TextInput
+  const header = (
+    <View style={[styles.header, { paddingTop: insets.top }]}>
+      <LargeTitle title="search" />
+      <View style={styles.fieldWrap}>
+        <SearchField
+          inputRef={inputRef}
           value={query}
-          onChangeText={(v) => {
-            setTouched(true);
-            setQuery(v);
+          onChangeText={setQuery}
+          placeholder="Search my vault…"
+          onSubmitEditing={() => rememberSearch(query)}
+          showCancel={query.length > 0}
+          onCancel={() => {
+            setQuery("");
+            inputRef.current?.blur();
           }}
-          placeholder="Search your vault…"
-          placeholderTextColor={colors.textFaint}
-          style={styles.input}
-          autoFocus
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
         />
-        {query.length > 0 ? (
-          <Pressable onPress={() => setQuery("")} hitSlop={8}>
-            <Ionicons name="close-circle" size={17} color={colors.borderStrong} />
-          </Pressable>
-        ) : null}
       </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scopes}
+        keyboardShouldPersistTaps="handled"
+        accessibilityLabel="Search in"
+      >
+        {TYPE_FILTERS.map((f) => (
+          <FilterChip key={f.label} label={f.label} selected={scope === f.value} onPress={() => setScope(f.value)} />
+        ))}
+      </ScrollView>
 
-      {busy && shown.length === 0 && query.trim() ? (
-        <View style={styles.busyRow}>
-          <ActivityIndicator size="small" color={colors.textFaint} />
-        </View>
-      ) : shown.length > 0 ? (
-        <Text style={styles.count}>
-          {shown.length} {shown.length === 1 ? "memory" : "memories"} found
-        </Text>
+      {query.trim().length > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Ask your vault: ${query.trim()}`}
+          onPress={askAbout}
+          style={({ pressed }) => [styles.askRow, pressed && styles.pressed]}
+        >
+          <View style={styles.askIcon}>
+            <Ionicons name="sparkles" size={16} color={c.onTint} />
+          </View>
+          <Text style={styles.askText} numberOfLines={1}>
+            Ask “{query.trim()}”
+          </Text>
+          <Ionicons name="arrow-forward" size={18} color={c.tint} />
+        </Pressable>
       ) : null}
 
-      <FlashList
-        masonry
-        numColumns={2}
-        data={shown}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={listPadding}
-        ListEmptyComponent={
-          showEmpty ? (
-            <Center style={styles.emptyWrap}>
-              <Ionicons name="search-outline" size={34} color={colors.borderStrong} />
-              <Text style={styles.emptyTitle}>Nothing found.</Text>
-              <Text style={styles.emptyBody}>Try a different word or phrase.</Text>
-            </Center>
-          ) : !touched ? (
-            <Center style={styles.emptyWrap}>
-              <Ionicons
-                name="chatbubble-ellipses-outline"
-                size={34}
-                color={colors.borderStrong}
-              />
-              <Text style={styles.emptyTitle}>Ask your vault anything.</Text>
-              <Text style={styles.emptyBody}>
-                Titles, tags, summaries and{"\n"}your own notes are all searchable.
-              </Text>
-            </Center>
-          ) : null
-        }
+      {active && shown.length > 0 ? (
+        <View style={styles.countRow} accessibilityLiveRegion="polite">
+          <Text style={styles.count}>
+            {shown.length} {shown.length === 1 ? "memory" : "memories"} found
+          </Text>
+          {searching ? <ActivityIndicator size="small" color={c.textFaint} /> : null}
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const empty = pending ? (
+    <View style={styles.loading}>
+      <ActivityIndicator color={c.textFaint} />
+    </View>
+  ) : none ? (
+    <EmptyState icon="search" title={`Nothing found for “${debounced}”.`} body="Try a broader phrase, or ask your vault instead." />
+  ) : !active ? (
+    recentSearches.length > 0 ? (
+      <View style={styles.recents}>
+        <View style={styles.recentsHeader}>
+          <Text style={styles.recentsTitle} accessibilityRole="header">
+            Recent
+          </Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Clear recent searches" hitSlop={10} onPress={() => setPrefs({ recentSearches: [] })}>
+            <Text style={styles.clear}>Clear</Text>
+          </Pressable>
+        </View>
+        {recentSearches.map((term, i) => (
+          <Pressable
+            key={term}
+            accessibilityRole="button"
+            accessibilityHint="Searches again"
+            onPress={() => run(term)}
+            style={({ pressed }) => [styles.recentRow, i > 0 && styles.recentDivider, pressed && styles.pressed]}
+          >
+            <Ionicons name="time-outline" size={18} color={c.textFaint} />
+            <Text style={styles.recentText} numberOfLines={1}>
+              {term}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    ) : (
+      <EmptyState
+        icon="search"
+        title="Search by meaning"
+        body="Find things by what they’re about — titles, summaries, tags and your own notes all count."
       />
-    </SafeAreaView>
+    )
+  ) : null;
+
+  return (
+    <View style={styles.container}>
+      <CardFeed data={shown} header={header} empty={empty} bottomInset={tabBarHeight} />
+    </View>
   );
 }
 
-function Center({
-  children,
-  style,
-}: {
-  children: React.ReactNode;
-  style?: object;
-}) {
-  return <View style={[styles.center, style]}>{children}</View>;
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 32,
-    gap: 10,
-  },
-  wordmark: {
-    fontFamily: fonts.serif,
-    fontSize: 26,
-    fontWeight: "700",
-    color: colors.text,
-    letterSpacing: -0.5,
-    paddingLeft: 14,
-    paddingTop: 6,
-    paddingBottom: 12,
-  },
-  inputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    borderRadius: radius.full,
-    paddingHorizontal: 16,
-    marginHorizontal: 14,
-    marginBottom: 10,
-  },
-  input: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: colors.text,
-  },
-  busyRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    paddingVertical: 8,
-  },
-  count: {
-    fontSize: 11.5,
-    color: colors.textFaint,
-    textAlign: "center",
-    marginBottom: 6,
-    letterSpacing: 0.3,
-  },
-  emptyWrap: { marginTop: 70 },
-  emptyTitle: {
-    fontFamily: fonts.serif,
-    fontSize: 22,
-    fontStyle: "italic",
-    color: colors.textFaint,
-  },
-  emptyBody: {
-    fontSize: 13,
-    color: colors.textFaint,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  muted: { color: colors.textFaint, fontStyle: "italic" },
-  cell: { paddingHorizontal: 4, paddingBottom: 10 },
-});
+const makeStyles = (c: Palette) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.bg },
+    header: { marginHorizontal: -10, paddingBottom: 8 },
+    fieldWrap: { paddingHorizontal: 16 },
+    scopes: { paddingHorizontal: 16, gap: 8, paddingTop: 14, paddingBottom: 4 },
+    pressed: { opacity: 0.6 },
+    askRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginHorizontal: 16,
+      marginTop: 12,
+      minHeight: HIT + 8,
+      paddingHorizontal: 12,
+      borderRadius: radius.md,
+      backgroundColor: c.tintSoft,
+    },
+    askIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: c.tint, alignItems: "center", justifyContent: "center" },
+    askText: { flex: 1, fontSize: 17, fontWeight: "500", color: c.text },
+    countRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 2 },
+    count: { fontSize: 13, color: c.textFaint, letterSpacing: 0.3 },
+    loading: { paddingVertical: 60, alignItems: "center" },
+    recents: { marginTop: 16, marginHorizontal: 6, backgroundColor: c.surface, borderRadius: radius.md, overflow: "hidden" },
+    recentsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
+    recentsTitle: { fontSize: 12, fontWeight: "500", color: c.textFaint, textTransform: "uppercase", letterSpacing: 1.5 },
+    clear: { fontSize: 15, color: c.textMuted },
+    recentRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: HIT + 4, paddingHorizontal: 16 },
+    recentDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator },
+    recentText: { flex: 1, fontSize: 17, color: c.text },
+  });

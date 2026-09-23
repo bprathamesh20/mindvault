@@ -4,7 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Card } from "../lib/types";
-import { colors, fonts, radius } from "../lib/theme";
+import { alpha, fonts, type Palette, radius, useStyles, useTheme } from "../lib/theme";
 import {
   timeAgo,
   domainOf,
@@ -33,7 +33,7 @@ const IMAGE: BadgeSpec = { label: "Image", icon: "image", bg: "#10b981" };
 const NOTE: BadgeSpec = { label: "Note", icon: "document-text", bg: "#8b5cf6" };
 const LINK: BadgeSpec = { label: "Link", icon: "link", bg: "#0ea5e9" };
 const PRODUCT: BadgeSpec = { label: "Product", icon: "pricetag", bg: "#059669" };
-const PENDING: BadgeSpec = { label: "Saving…", icon: "sync-outline", bg: colors.surfaceAlt, fg: colors.textMuted };
+const PENDING: BadgeSpec = { label: "Saving…", icon: "sync-outline", bg: "rgba(120,113,108,0.18)", fg: "#78716C" };
 const FAILED: BadgeSpec = { label: "Couldn't save", icon: "warning", bg: "#f59e0b" };
 const GITHUB_BG = "#24292f";
 
@@ -78,6 +78,7 @@ const COVER_DEFAULT = ["#334155", "#1e293b", "#0b1220"] as const;
 /* ------------------------------------------------------------------ */
 
 function Chip({ spec, size = 24 }: { spec: BadgeSpec; size?: number }) {
+  const styles = useStyles(makeStyles);
   const iconSize = Math.round(size * 0.54);
   const style = { width: size, height: size, borderRadius: Math.round(size * 0.3) };
   if (spec.gradient) {
@@ -95,6 +96,7 @@ function Chip({ spec, size = 24 }: { spec: BadgeSpec; size?: number }) {
 }
 
 function Badge({ spec, overlay }: { spec: BadgeSpec; overlay?: boolean }) {
+  const styles = useStyles(makeStyles);
   if (overlay) {
     return (
       <View style={styles.overlayBadge}>
@@ -111,24 +113,17 @@ function Badge({ spec, overlay }: { spec: BadgeSpec; overlay?: boolean }) {
   );
 }
 
-function Kebab({ overlay }: { overlay?: boolean }) {
-  return (
-    <View style={overlay ? styles.kebabOverlay : styles.kebab}>
-      <Ionicons name="ellipsis-horizontal" size={15} color={overlay ? "#fff" : colors.textFaint} />
-    </View>
-  );
-}
-
 function Header({ spec }: { spec: BadgeSpec }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.header}>
       <Badge spec={spec} />
-      <Kebab />
     </View>
   );
 }
 
 function Tags({ tags }: { tags: string[] }) {
+  const styles = useStyles(makeStyles);
   if (tags.length === 0) return null;
   return (
     <View style={styles.tagRow}>
@@ -142,6 +137,7 @@ function Tags({ tags }: { tags: string[] }) {
 }
 
 function Footer({ left, savedAt }: { left?: string; savedAt: number }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.footer}>
       <Text style={[styles.meta, styles.footerLeft]} numberOfLines={1}>
@@ -165,6 +161,8 @@ function Media({
   cornerLabel?: string;
   price?: ProductInfo;
 }) {
+  const styles = useStyles(makeStyles);
+  const c = useTheme();
   const aspect =
     item.thumbWidth && item.thumbHeight ? item.thumbWidth / item.thumbHeight : 16 / 10;
   return (
@@ -180,7 +178,7 @@ function Media({
       {/* Bleed the bottom of the image into the card surface. */}
       <LinearGradient
         pointerEvents="none"
-        colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.72)", colors.surface]}
+        colors={[alpha(c.card, 0), alpha(c.card, 0.72), c.card]}
         locations={[0, 0.55, 1]}
         style={styles.mediaFade}
       />
@@ -212,9 +210,6 @@ function Media({
           <Text style={styles.priceText}>{priceLabel(price)}</Text>
         </View>
       ) : null}
-      <View style={[styles.mediaKebab, price ? styles.mediaKebabBottom : null]}>
-        <Kebab overlay />
-      </View>
     </View>
   );
 }
@@ -229,6 +224,7 @@ const AVATAR_HUES: readonly (readonly [string, string])[] = [
 ];
 
 function Avatar({ seed, size = 32 }: { seed: string; size?: number }) {
+  const styles = useStyles(makeStyles);
   let h = 0;
   for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   const grad = AVATAR_HUES[h % AVATAR_HUES.length];
@@ -249,21 +245,35 @@ function Avatar({ seed, size = 32 }: { seed: string; size?: number }) {
 function Shell({
   item,
   onPress,
+  onLongPress,
   style,
   children,
 }: {
   item: Card;
   onPress?: (item: Card) => void;
+  onLongPress?: (item: Card) => void;
   style?: object;
   children: ReactNode;
 }) {
+  const styles = useStyles(makeStyles);
   return (
     <Pressable
       style={({ pressed }) => [styles.card, style, pressed && styles.pressed]}
       onPress={() => onPress?.(item)}
-      android_ripple={{ color: colors.surfaceAlt }}
+      onLongPress={onLongPress ? () => onLongPress(item) : undefined}
+      delayLongPress={320}
+      accessibilityRole="button"
+      accessibilityLabel={cardLabel(item)}
+      accessibilityHint={onLongPress ? "Opens the memory. Long press for more actions." : "Opens the memory."}
+      accessibilityActions={onLongPress ? [{ name: "longpress", label: "More actions" }] : undefined}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === "longpress") onLongPress?.(item);
+      }}
     >
-      {children}
+      {/* One spoken label for the whole card; children are decoration. */}
+      <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        {children}
+      </View>
     </Pressable>
   );
 }
@@ -275,13 +285,16 @@ function Shell({
 export const ItemCard = memo(function ItemCard({
   item,
   onPress,
+  onLongPress,
 }: {
   item: Card;
   onPress?: (item: Card) => void;
+  onLongPress?: (item: Card) => void;
 }) {
+  const styles = useStyles(makeStyles);
   if (item.status === "pending") {
     return (
-      <Shell item={item} onPress={onPress}>
+      <Shell item={item} onPress={onPress} onLongPress={onLongPress}>
         <Header spec={PENDING} />
         <View style={styles.body}>
           <View style={[styles.skeletonBar, { width: "75%", height: 12 }]} />
@@ -303,7 +316,7 @@ export const ItemCard = memo(function ItemCard({
 
   if (item.status === "failed") {
     return (
-      <Shell item={item} onPress={onPress} style={styles.failedCard}>
+      <Shell item={item} onPress={onPress} onLongPress={onLongPress} style={styles.failedCard}>
         <Header spec={FAILED} />
         <View style={styles.body}>
           <Text style={styles.title} numberOfLines={2}>
@@ -322,12 +335,13 @@ export const ItemCard = memo(function ItemCard({
 
   switch (item.type) {
     case "tweet":
-      return <TweetCard item={item} onPress={onPress} />;
+      return <TweetCard item={item} onPress={onPress} onLongPress={onLongPress} />;
     case "instagram":
       return (
         <MediaCard
           item={item}
           onPress={onPress}
+          onLongPress={onLongPress}
           spec={instagramSpec(item)}
           play={embedString(item.embedJson, "kind") === "reel"}
         />
@@ -337,36 +351,38 @@ export const ItemCard = memo(function ItemCard({
         <MediaCard
           item={item}
           onPress={onPress}
+          onLongPress={onLongPress}
           spec={{ ...YOUTUBE, label: embedString(item.embedJson, "kind") === "short" ? "Short" : "YouTube" }}
           play
           showAuthor
         />
       );
     case "image":
-      return <ImageCard item={item} onPress={onPress} />;
+      return <ImageCard item={item} onPress={onPress} onLongPress={onLongPress} />;
     case "note":
-      return <NoteCard item={item} onPress={onPress} />;
+      return <NoteCard item={item} onPress={onPress} onLongPress={onLongPress} />;
     case "link":
-      return <LinkCard item={item} onPress={onPress} />;
+      return <LinkCard item={item} onPress={onPress} onLongPress={onLongPress} />;
     case "document":
-      return <DocumentCard item={item} onPress={onPress} />;
+      return <DocumentCard item={item} onPress={onPress} onLongPress={onLongPress} />;
     case "github":
-      return <GitHubCard item={item} onPress={onPress} />;
+      return <GitHubCard item={item} onPress={onPress} onLongPress={onLongPress} />;
     case "product":
-      return <ProductCard item={item} onPress={onPress} />;
+      return <ProductCard item={item} onPress={onPress} onLongPress={onLongPress} />;
     case "article":
     default:
-      return <ArticleCard item={item} onPress={onPress} />;
+      return <ArticleCard item={item} onPress={onPress} onLongPress={onLongPress} />;
   }
 });
 
-type Props = { item: Card; onPress?: (item: Card) => void };
+type Props = { item: Card; onPress?: (item: Card) => void; onLongPress?: (item: Card) => void };
 
-function ArticleCard({ item, onPress }: Props) {
+function ArticleCard({ item, onPress, onLongPress }: Props) {
+  const styles = useStyles(makeStyles);
   const description = item.summary ?? item.preview;
   const siteName = embedString(item.embedJson, "siteName");
   return (
-    <Shell item={item} onPress={onPress}>
+    <Shell item={item} onPress={onPress} onLongPress={onLongPress}>
       {item.thumbnailUrl ? (
         <Media item={item} spec={ARTICLE} cornerLabel={readTime(item)} />
       ) : (
@@ -390,7 +406,9 @@ function ArticleCard({ item, onPress }: Props) {
   );
 }
 
-function TweetCard({ item, onPress }: Props) {
+function TweetCard({ item, onPress, onLongPress }: Props) {
+  const styles = useStyles(makeStyles);
+  const c = useTheme();
   const handle = (embedString(item.embedJson, "handle") ?? item.author ?? "").replace(/^@/, "");
   const likes = embedNumber(item.embedJson, "likes");
   const retweets = embedNumber(item.embedJson, "retweets");
@@ -400,7 +418,7 @@ function TweetCard({ item, onPress }: Props) {
   const aspect =
     item.thumbWidth && item.thumbHeight ? item.thumbWidth / item.thumbHeight : 16 / 10;
   return (
-    <Shell item={item} onPress={onPress}>
+    <Shell item={item} onPress={onPress} onLongPress={onLongPress}>
       <View style={styles.tweetHeader}>
         <Avatar seed={handle || "x"} />
         <View style={styles.tweetIdentity}>
@@ -408,7 +426,7 @@ function TweetCard({ item, onPress }: Props) {
             <Text style={styles.tweetName} numberOfLines={1}>
               {displayName(handle)}
             </Text>
-            <Ionicons name="logo-x" size={10} color={colors.textFaint} />
+            <Ionicons name="logo-x" size={10} color={c.textFaint} />
           </View>
           <Text style={styles.meta} numberOfLines={1}>
             @{handle}
@@ -464,24 +482,19 @@ function TweetCard({ item, onPress }: Props) {
           <View style={styles.engagement}>
             {retweets !== undefined ? (
               <View style={styles.engagementItem}>
-                <Ionicons name="repeat-outline" size={15} color={colors.textFaint} />
+                <Ionicons name="repeat-outline" size={15} color={c.textFaint} />
                 <Text style={styles.engagementText}>{compact(retweets)}</Text>
               </View>
             ) : null}
             {likes !== undefined ? (
               <View style={styles.engagementItem}>
-                <Ionicons name="heart-outline" size={14} color={colors.textFaint} />
+                <Ionicons name="heart-outline" size={14} color={c.textFaint} />
                 <Text style={styles.engagementText}>{compact(likes)}</Text>
               </View>
             ) : null}
           </View>
         ) : null}
-        <View style={styles.tagsAndKebab}>
-          <View style={styles.footerLeft}>
-            <Tags tags={item.tags} />
-          </View>
-          <Kebab />
-        </View>
+        <Tags tags={item.tags} />
       </View>
     </Shell>
   );
@@ -490,13 +503,15 @@ function TweetCard({ item, onPress }: Props) {
 function MediaCard({
   item,
   onPress,
+  onLongPress,
   spec,
   play,
   showAuthor,
 }: Props & { spec: BadgeSpec; play?: boolean; showAuthor?: boolean }) {
+  const styles = useStyles(makeStyles);
   const author = item.author?.replace(/^@/, "");
   return (
-    <Shell item={item} onPress={onPress}>
+    <Shell item={item} onPress={onPress} onLongPress={onLongPress}>
       {item.thumbnailUrl ? <Media item={item} spec={spec} play={play} /> : <Header spec={spec} />}
       <View style={[styles.body, item.thumbnailUrl && styles.bodyTight]}>
         {item.title ? (
@@ -530,10 +545,11 @@ function MediaCard({
   );
 }
 
-function ImageCard({ item, onPress }: Props) {
+function ImageCard({ item, onPress, onLongPress }: Props) {
+  const styles = useStyles(makeStyles);
   const caption = item.summary ?? item.preview;
   return (
-    <Shell item={item} onPress={onPress}>
+    <Shell item={item} onPress={onPress} onLongPress={onLongPress}>
       {item.thumbnailUrl ? <Media item={item} spec={IMAGE} /> : <Header spec={IMAGE} />}
       <View style={[styles.body, item.thumbnailUrl && styles.bodyTight]}>
         {item.title ? (
@@ -553,7 +569,8 @@ function ImageCard({ item, onPress }: Props) {
   );
 }
 
-function ProductCard({ item, onPress }: Props) {
+function ProductCard({ item, onPress, onLongPress }: Props) {
+  const styles = useStyles(makeStyles);
   const price = productInfo(item.embedJson);
   const brand = embedString(item.embedJson, "brand") ?? item.author;
   const availability = embedString(item.embedJson, "availability");
@@ -561,7 +578,7 @@ function ProductCard({ item, onPress }: Props) {
   const caption = item.summary ?? item.preview;
   const meta = [brand, availability].filter(Boolean).join(" · ");
   return (
-    <Shell item={item} onPress={onPress}>
+    <Shell item={item} onPress={onPress} onLongPress={onLongPress}>
       {item.thumbnailUrl ? (
         <Media item={item} spec={PRODUCT} price={price} />
       ) : (
@@ -595,7 +612,9 @@ function ProductCard({ item, onPress }: Props) {
 
 const BULLET_RE = /^([-*•]|\d+[.)])\s+/;
 
-function NoteCard({ item, onPress }: Props) {
+function NoteCard({ item, onPress, onLongPress }: Props) {
+  const styles = useStyles(makeStyles);
+  const c = useTheme();
   const body = item.preview?.trim() ?? "";
   const lines = body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const bullets = lines.filter((l) => BULLET_RE.test(l));
@@ -603,10 +622,10 @@ function NoteCard({ item, onPress }: Props) {
   const title = item.title ?? (asList ? undefined : lines[0]);
   const rest = !item.title && !asList ? lines.slice(1).join(" ") : asList ? undefined : body;
   return (
-    <Shell item={item} onPress={onPress} style={styles.noteCard}>
+    <Shell item={item} onPress={onPress} onLongPress={onLongPress} style={styles.noteCard}>
       <LinearGradient
         pointerEvents="none"
-        colors={["#eef2ff", "#f5f3ff", colors.surface]}
+        colors={c.noteGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -641,10 +660,11 @@ function NoteCard({ item, onPress }: Props) {
   );
 }
 
-function LinkCard({ item, onPress }: Props) {
+function LinkCard({ item, onPress, onLongPress }: Props) {
+  const styles = useStyles(makeStyles);
   const description = item.summary ?? item.preview;
   return (
-    <Shell item={item} onPress={onPress}>
+    <Shell item={item} onPress={onPress} onLongPress={onLongPress}>
       <Header spec={LINK} />
       <View style={styles.body}>
         {item.title ? (
@@ -676,7 +696,8 @@ function LinkCard({ item, onPress }: Props) {
   );
 }
 
-function DocumentCard({ item, onPress }: Props) {
+function DocumentCard({ item, onPress, onLongPress }: Props) {
+  const styles = useStyles(makeStyles);
   const spec = documentSpec(item);
   const filename = embedString(item.embedJson, "filename");
   const title = item.title ?? filename?.replace(/\.[a-z0-9]+$/i, "");
@@ -688,7 +709,7 @@ function DocumentCard({ item, onPress }: Props) {
     timeAgo(item.savedAt),
   ].filter(Boolean);
   return (
-    <Shell item={item} onPress={onPress}>
+    <Shell item={item} onPress={onPress} onLongPress={onLongPress}>
       <Header spec={spec} />
       <DocumentCover item={item} spec={spec} />
       <View style={styles.body}>
@@ -707,6 +728,7 @@ function DocumentCard({ item, onPress }: Props) {
 }
 
 function DocumentCover({ item, spec }: { item: Card; spec: BadgeSpec }) {
+  const styles = useStyles(makeStyles);
   const format = (embedString(item.embedJson, "format") ?? item.sourceDomain ?? "").toLowerCase();
   const tone = COVER_TONE[format] ?? COVER_DEFAULT;
   const { heading, kicker } = coverText(item);
@@ -748,7 +770,9 @@ function DocumentCover({ item, spec }: { item: Card; spec: BadgeSpec }) {
   );
 }
 
-function GitHubCard({ item, onPress }: Props) {
+function GitHubCard({ item, onPress, onLongPress }: Props) {
+  const styles = useStyles(makeStyles);
+  const c = useTheme();
   const e = item.embedJson;
   const kind = embedString(e, "kind") ?? "repo";
   const owner = embedString(e, "owner") ?? item.author?.replace(/^@/, "") ?? "";
@@ -814,7 +838,7 @@ function GitHubCard({ item, onPress }: Props) {
         <View style={styles.engagement}>
           {comments !== undefined ? (
             <View style={styles.engagementItem}>
-              <Ionicons name="chatbubble-outline" size={13} color={colors.textFaint} />
+              <Ionicons name="chatbubble-outline" size={13} color={c.textFaint} />
               <Text style={styles.engagementText}>{compact(comments)}</Text>
             </View>
           ) : null}
@@ -851,7 +875,7 @@ function GitHubCard({ item, onPress }: Props) {
         <View style={styles.engagement}>
           {followers !== undefined ? (
             <View style={styles.engagementItem}>
-              <Ionicons name="people-outline" size={13} color={colors.textFaint} />
+              <Ionicons name="people-outline" size={13} color={c.textFaint} />
               <Text style={styles.engagementText}>{compact(followers)} followers</Text>
             </View>
           ) : null}
@@ -888,13 +912,13 @@ function GitHubCard({ item, onPress }: Props) {
           <View style={styles.engagement}>
             {stars !== undefined ? (
               <View style={styles.engagementItem}>
-                <Ionicons name="star-outline" size={13} color={colors.textFaint} />
+                <Ionicons name="star-outline" size={13} color={c.textFaint} />
                 <Text style={styles.engagementText}>{compact(stars)}</Text>
               </View>
             ) : null}
             {forks !== undefined ? (
               <View style={styles.engagementItem}>
-                <Ionicons name="git-branch-outline" size={13} color={colors.textFaint} />
+                <Ionicons name="git-branch-outline" size={13} color={c.textFaint} />
                 <Text style={styles.engagementText}>{compact(forks)}</Text>
               </View>
             ) : null}
@@ -911,7 +935,7 @@ function GitHubCard({ item, onPress }: Props) {
   }
 
   return (
-    <Shell item={item} onPress={onPress}>
+    <Shell item={item} onPress={onPress} onLongPress={onLongPress}>
       <Header spec={spec} />
       <View style={styles.body}>
         {body}
@@ -925,6 +949,36 @@ function GitHubCard({ item, onPress }: Props) {
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
+
+const TYPE_NAMES: Record<Card["type"], string> = {
+  article: "Article",
+  tweet: "Post on X",
+  instagram: "Instagram post",
+  youtube: "YouTube video",
+  image: "Image",
+  note: "Note",
+  link: "Link",
+  document: "Document",
+  github: "GitHub",
+  product: "Product",
+};
+
+/** What VoiceOver reads for a card: kind, title, source, price, age. */
+function cardLabel(item: Card): string {
+  if (item.status === "pending") return `Saving ${item.url ? domainOf(item.url) : "memory"}`;
+  const title = item.title ?? item.preview?.slice(0, 120) ?? item.url ?? "Untitled";
+  const price = item.type === "product" ? productInfo(item.embedJson) : undefined;
+  return [
+    item.status === "failed" ? "Couldn't save" : TYPE_NAMES[item.type],
+    title,
+    item.author ? `by ${item.author.replace(/^@/, "")}` : undefined,
+    item.sourceDomain,
+    price ? priceLabel(price) : undefined,
+    `saved ${timeAgo(item.savedAt)}`,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
 
 function coverText(item: Card): { heading: string; kicker?: string } {
   const md = item.preview ?? "";
@@ -1000,21 +1054,21 @@ function tweetQuote(item: Card): { name?: string; handle?: string; text?: string
 /* Styles                                                              */
 /* ------------------------------------------------------------------ */
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Palette) => StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: c.card,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderColor: c.cardBorder,
     shadowColor: "#000",
-    shadowOpacity: 0.05,
+    shadowOpacity: c.scheme === "dark" ? 0 : 0.05,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 1,
     overflow: "hidden",
   },
   pressed: { opacity: 0.9, transform: [{ scale: 0.985 }] },
-  noteCard: { borderColor: colors.noteBorder },
+  noteCard: { borderColor: c.noteBorder },
   failedCard: { borderStyle: "dashed", borderWidth: 1 },
 
   header: {
@@ -1025,13 +1079,13 @@ const styles = StyleSheet.create({
     paddingTop: 11,
   },
   badge: { flexDirection: "row", alignItems: "center", gap: 7, flexShrink: 1 },
-  badgeText: { fontSize: 12, fontWeight: "500", color: colors.textMuted },
+  badgeText: { fontSize: 12.5, fontWeight: "500", color: c.textMuted },
   chip: { alignItems: "center", justifyContent: "center" },
   overlayBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(255,255,255,0.9)",
+    backgroundColor: c.scheme === "dark" ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.9)",
     borderRadius: radius.full,
     paddingLeft: 3,
     paddingRight: 9,
@@ -1039,36 +1093,25 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(0,0,0,0.06)",
   },
-  overlayBadgeText: { fontSize: 11, fontWeight: "600", color: colors.text },
-  kebab: { width: 26, height: 26, alignItems: "center", justifyContent: "center", marginRight: -6 },
-  kebabOverlay: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  overlayBadgeText: { fontSize: 11, fontWeight: "600", color: c.text },
 
   body: { paddingHorizontal: 12, paddingBottom: 12, paddingTop: 9, gap: 6 },
   bodyTight: { paddingTop: 4 },
-  title: { fontSize: 14.5, fontWeight: "600", color: colors.text, lineHeight: 19.5, letterSpacing: -0.1 },
-  bodyText: { fontSize: 12.5, color: colors.textMuted, lineHeight: 18 },
-  meta: { fontSize: 11, color: colors.textFaint },
+  title: { fontSize: 15, fontWeight: "600", color: c.text, lineHeight: 20, letterSpacing: -0.2 },
+  bodyText: { fontSize: 13.5, color: c.textMuted, lineHeight: 19 },
+  meta: { fontSize: 12, color: c.textFaint },
   footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 },
   footerLeft: { flexShrink: 1 },
 
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 4 },
-  tag: { backgroundColor: colors.surfaceAlt, borderRadius: radius.full, paddingHorizontal: 9, paddingVertical: 4 },
-  tagText: { fontSize: 10.5, color: colors.textBody, fontWeight: "500" },
+  tag: { backgroundColor: c.fill, borderRadius: radius.full, paddingHorizontal: 9, paddingVertical: 4 },
+  tagText: { fontSize: 11.5, color: c.textMuted, fontWeight: "500" },
 
   media: { position: "relative", marginBottom: -2 },
-  mediaImage: { width: "100%", backgroundColor: colors.surfaceAlt },
+  mediaImage: { width: "100%", backgroundColor: c.surfaceAlt },
   mediaFade: { position: "absolute", left: 0, right: 0, bottom: 0, height: "46%" },
   mediaVignette: { position: "absolute", left: 0, right: 0, top: 0, height: 56 },
   mediaBadge: { position: "absolute", left: 12, bottom: 6 },
-  mediaKebab: { position: "absolute", right: 8, top: 8 },
-  mediaKebabBottom: { top: undefined, bottom: 8 },
   pricePill: {
     position: "absolute",
     right: 10,
@@ -1088,14 +1131,14 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.5)",
     textDecorationLine: "line-through",
   },
-  priceInline: { fontSize: 15, fontWeight: "700", color: colors.text },
+  priceInline: { fontSize: 15, fontWeight: "700", color: c.text },
   cornerLabel: {
     position: "absolute",
     right: 12,
     bottom: 10,
     fontSize: 11,
     fontWeight: "500",
-    color: colors.textBody,
+    color: c.textBody,
   },
   playOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   playCircle: {
@@ -1109,45 +1152,44 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   playIcon: { marginLeft: 3 },
-  inset: { borderRadius: 12, overflow: "hidden", borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginTop: 2 },
-  linkThumb: { width: "100%", height: 96, backgroundColor: colors.surfaceAlt },
+  inset: { borderRadius: 12, overflow: "hidden", borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, marginTop: 2 },
+  linkThumb: { width: "100%", height: 96, backgroundColor: c.surfaceAlt },
 
   tweetHeader: { flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 12, paddingTop: 11 },
   tweetIdentity: { flex: 1, minWidth: 0 },
   tweetNameRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  tweetName: { fontSize: 13, fontWeight: "600", color: colors.text, flexShrink: 1 },
-  tweetText: { fontSize: 14, color: colors.textBody, lineHeight: 20 },
+  tweetName: { fontSize: 13, fontWeight: "600", color: c.text, flexShrink: 1 },
+  tweetText: { fontSize: 14, color: c.textBody, lineHeight: 20 },
   avatar: { alignItems: "center", justifyContent: "center" },
   avatarText: { color: "#fff", fontWeight: "600" },
   quote: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderColor: c.border,
     borderRadius: 12,
     padding: 10,
-    backgroundColor: colors.bg,
+    backgroundColor: c.bg,
     gap: 3,
   },
-  quoteAuthor: { fontSize: 12, fontWeight: "600", color: colors.text, flexShrink: 1 },
-  quoteText: { fontSize: 12, color: colors.textMuted, lineHeight: 17 },
+  quoteAuthor: { fontSize: 12, fontWeight: "600", color: c.text, flexShrink: 1 },
+  quoteText: { fontSize: 12, color: c.textMuted, lineHeight: 17 },
   engagement: { flexDirection: "row", gap: 16, marginTop: 2 },
   engagementItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  engagementText: { fontSize: 12, color: colors.textFaint },
-  tagsAndKebab: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 6 },
+  engagementText: { fontSize: 12.5, color: c.textFaint },
 
   authorRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 2 },
-  authorText: { fontSize: 12.5, color: colors.textMuted, flexShrink: 1 },
+  authorText: { fontSize: 12.5, color: c.textMuted, flexShrink: 1 },
 
   bulletList: { gap: 3, marginTop: 2 },
   bulletRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   bulletDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: "#a78bfa" },
-  noteText: { fontSize: 13, color: colors.textBody, lineHeight: 19, flexShrink: 1 },
+  noteText: { fontSize: 13, color: c.textBody, lineHeight: 19, flexShrink: 1 },
 
-  docTitle: { fontFamily: fonts.serif, fontSize: 18, color: colors.text, lineHeight: 23 },
+  docTitle: { fontFamily: fonts.serif, fontSize: 18, color: c.text, lineHeight: 23 },
   coverWrap: { paddingHorizontal: 12, paddingTop: 10 },
   coverStack: { aspectRatio: 4 / 3, position: "relative" },
-  coverSheet: { position: "absolute", top: 0, bottom: 0, borderRadius: 8, backgroundColor: colors.borderStrong },
+  coverSheet: { position: "absolute", top: 0, bottom: 0, borderRadius: 8, backgroundColor: c.borderStrong },
   coverSheetBack: { left: 12, right: 12, transform: [{ translateX: 5 }, { translateY: 12 }, { rotate: "2.5deg" }], opacity: 0.7 },
-  coverSheetMid: { left: 6, right: 6, transform: [{ translateX: 2 }, { translateY: 6 }, { rotate: "-1deg" }], backgroundColor: colors.border },
+  coverSheetMid: { left: 6, right: 6, transform: [{ translateX: 2 }, { translateY: 6 }, { rotate: "-1deg" }], backgroundColor: c.border },
   coverTop: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 8,
@@ -1183,16 +1225,16 @@ const styles = StyleSheet.create({
   coverHeading: { fontFamily: fonts.serif, fontSize: 17, lineHeight: 20, color: "#fff" },
   coverKicker: { fontSize: 8, letterSpacing: 1.4, lineHeight: 12, color: "rgba(255,255,255,0.6)", fontWeight: "500" },
 
-  skeletonBar: { height: 10, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
+  skeletonBar: { height: 10, borderRadius: radius.sm, backgroundColor: c.surfaceAlt },
 
   ghRow: { flexDirection: "row", alignItems: "center", gap: 9 },
-  ghAvatar: { width: 32, height: 32, borderRadius: 9, backgroundColor: colors.surfaceAlt },
-  ghOwner: { fontWeight: "400", color: colors.textMuted },
+  ghAvatar: { width: 32, height: 32, borderRadius: 9, backgroundColor: c.surfaceAlt },
+  ghOwner: { fontWeight: "400", color: c.textMuted },
   ghPath: {
     fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
     fontSize: 11,
-    color: colors.textMuted,
-    backgroundColor: colors.surfaceAlt,
+    color: c.textMuted,
+    backgroundColor: c.surfaceAlt,
     borderRadius: 6,
     paddingHorizontal: 7,
     paddingVertical: 4,
