@@ -226,7 +226,7 @@ function ItemScreen({ itemId }: { itemId: string }) {
   actions.push({ icon: "ellipsis-horizontal", label: "More", onPress: more });
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={styles.container} behavior="padding">
       <NavBar insetTop={insets.top} onShare={it.url ? () => void share(it.title, it.url) : undefined} onMore={more} />
 
       <ScrollView

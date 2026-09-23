@@ -103,5 +103,5 @@ export function CardFeed({
 }
 
 const styles = StyleSheet.create({
-  cell: { paddingHorizontal: 5, paddingBottom: 10 },
+  cell: { paddingHorizontal: 5, paddingBottom: 18 },
 });
