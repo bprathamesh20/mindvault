@@ -360,6 +360,8 @@ export const ItemCard = memo(function ItemCard({
     showHeading = !!item.title && !(item.preview ?? "").startsWith(item.title);
   } else if (item.type === "document") {
     tile = <DocumentTile item={item} spec={spec} />;
+    // Without a rendered page the cover already carries the title.
+    showHeading = !!item.thumbnailUrl;
   } else if (item.type === "github") {
     tile = <GitHubTile item={item} spec={spec} />;
     showHeading = false;
