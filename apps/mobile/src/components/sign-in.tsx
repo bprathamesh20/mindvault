@@ -45,7 +45,7 @@ export function SignIn() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={styles.container} behavior="padding">
         <View style={styles.hero}>
           <Text style={styles.wordmark} accessibilityRole="header">
             MindVault

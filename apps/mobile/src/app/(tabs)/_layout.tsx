@@ -24,9 +24,6 @@ export default function TabsLayout() {
       screenListeners={{ tabPress: () => haptics.selection() }}
       screenOptions={{
         headerShown: false,
-        // Android resizes the window for the keyboard; keep the bar out of
-        // the way so the Ask composer sits right on top of the keys.
-        tabBarHideOnKeyboard: Platform.OS === "android",
         sceneStyle: { backgroundColor: c.bg },
         tabBarActiveTintColor: c.tint,
         tabBarInactiveTintColor: c.textFaint,

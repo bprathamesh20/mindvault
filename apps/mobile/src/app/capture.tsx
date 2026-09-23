@@ -91,7 +91,7 @@ export default function CaptureScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: Platform.OS === "ios" ? 0 : insets.top }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior="padding"
     >
       {Platform.OS === "ios" ? <View style={styles.grabber} accessibilityElementsHidden /> : null}
       <View style={styles.navBar}>

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   ActivityIndicator,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -31,6 +30,7 @@ import { Markdown } from "../../components/markdown";
 import { IconButton } from "../../components/ui";
 import { useOpenUrl } from "../../lib/item-actions";
 import { haptics } from "../../lib/haptics";
+import { useKeyboardHeight } from "../../lib/keyboard";
 import { fonts, HIT, type Palette, radius, useStyles, useTheme } from "../../lib/theme";
 
 type Message = {
@@ -68,19 +68,17 @@ export default function AskScreen() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [typing, setTyping] = useState<{ id: string; shown: number } | null>(null);
-  const [keyboardUp, setKeyboardUp] = useState(false);
   const seq = useRef(0);
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
 
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardUp = keyboardHeight > 0;
+
+  // Keep the latest message in view as the keyboard opens.
   useEffect(() => {
-    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () => setKeyboardUp(true));
-    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => setKeyboardUp(false));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
+    if (keyboardUp) scrollRef.current?.scrollToEnd({ animated: true });
+  }, [keyboardUp]);
 
   // Reveal answers a few words at a time so they read like they're being
   // written. Reduce Motion shows them whole.
@@ -177,7 +175,16 @@ export default function AskScreen() {
   }
 
   const canSend = input.trim().length > 0 && !busy;
-  const composerBottom = keyboardUp ? 8 : Platform.OS === "ios" ? tabBarHeight + 8 : 10;
+  // iOS: the KeyboardAvoidingView lifts the screen; the tab bar floats over
+  // content, so clear it when the keyboard is down.
+  // Android (edge-to-edge): nothing resizes, so lift the composer by the part
+  // of the keyboard that rises above the tab bar.
+  const composerBottom =
+    Platform.OS === "ios"
+      ? keyboardUp
+        ? 8
+        : tabBarHeight + 8
+      : Math.max(keyboardHeight - tabBarHeight, 0) + 10;
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>

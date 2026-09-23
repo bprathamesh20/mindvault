@@ -20,7 +20,8 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { api, type Id } from "../../lib/backend";
 import { type Card, TYPE_FILTERS, typeLabel } from "../../lib/types";
 import { CardFeed } from "../../components/card-feed";
-import { Button, EmptyState, FilterChip, IconButton, LargeTitle } from "../../components/ui";
+import { Button, EmptyState, FilterChip, LargeTitle } from "../../components/ui";
+import { haptics } from "../../lib/haptics";
 import { useActionSheet } from "../../components/action-sheet";
 import { usePrompt } from "../../components/prompt";
 import { useToast } from "../../components/toast";
@@ -111,11 +112,7 @@ export default function VaultScreen() {
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top }]}>
-      <LargeTitle
-        title="mindvault"
-        subtitle={subtitle}
-        accessory={<IconButton icon="add" label="New memory" variant="filled" size={26} onPress={newMemory} />}
-      />
+      <LargeTitle title="mindvault" subtitle={subtitle} />
 
       <Pressable
         accessibilityRole="search"
@@ -225,7 +222,7 @@ export default function VaultScreen() {
         header={header}
         empty={empty}
         footer={footer}
-        bottomInset={tabBarHeight}
+        bottomInset={tabBarHeight + 74}
         onScroll={onScroll}
         onEndReached={() => {
           if (status === "CanLoadMore") loadMore(PAGE);
@@ -252,11 +249,27 @@ export default function VaultScreen() {
           <Text style={styles.compactTitle} numberOfLines={1} accessibilityRole="header">
             {subtitle ?? "mindvault"}
           </Text>
-          <View style={[styles.compactSide, styles.compactRight]}>
-            <IconButton icon="add" label="New memory" size={26} onPress={newMemory} />
-          </View>
+          <View style={styles.compactSide} />
         </View>
       </Animated.View>
+
+      {/* In the thumb zone, where the web app keeps its ＋ too. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="New memory"
+        accessibilityHint="Save a link, note or document"
+        onPress={() => {
+          haptics.light();
+          newMemory();
+        }}
+        style={({ pressed }) => [
+          styles.fab,
+          { bottom: (Platform.OS === "ios" ? tabBarHeight : 0) + 16 },
+          pressed && styles.fabPressed,
+        ]}
+      >
+        <Ionicons name="add" size={30} color={c.inverseText} />
+      </Pressable>
     </View>
   );
 }
@@ -318,6 +331,21 @@ const makeStyles = (c: Palette) =>
     },
     compactInner: { height: 44, flexDirection: "row", alignItems: "center", paddingHorizontal: 6 },
     compactSide: { width: 60 },
-    compactRight: { alignItems: "flex-end" },
+    fab: {
+      position: "absolute",
+      right: 20,
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      backgroundColor: c.inverse,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOpacity: c.scheme === "dark" ? 0.5 : 0.22,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 8,
+    },
+    fabPressed: { transform: [{ scale: 0.94 }], opacity: 0.9 },
     compactTitle: { flex: 1, textAlign: "center", fontFamily: fonts.serifItalic, fontSize: 21, color: c.text },
   });
