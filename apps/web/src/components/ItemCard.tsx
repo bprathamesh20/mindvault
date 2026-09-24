@@ -10,11 +10,13 @@ import {
   Newspaper,
   Play,
   Presentation,
+  ShoppingBag,
   Star,
   StickyNote,
   TriangleAlert,
 } from "lucide-react";
 import type { Card } from "./types";
+import { formatPrice, priceLabel, productInfo, type ProductInfo } from "../lib/product";
 
 /**
  * Pinterest-style cards, shared with the mobile app: the picture does the
@@ -82,6 +84,7 @@ const ARTICLE: TagSpec = { label: "Article", Icon: Newspaper, chip: "bg-indigo-5
 const IMAGE: TagSpec = { label: "Image", Icon: ImageIcon, chip: "bg-emerald-500 text-white" };
 const NOTE: TagSpec = { label: "Note", Icon: StickyNote, chip: "bg-violet-500 text-white" };
 const LINK: TagSpec = { label: "Link", Icon: Link2, chip: "bg-sky-500 text-white" };
+const PRODUCT: TagSpec = { label: "Product", Icon: ShoppingBag, chip: "bg-emerald-600 text-white" };
 const TWEET: TagSpec = { label: "Post", Icon: (p) => <XMark {...p} size={10} />, chip: "bg-black text-white dark:bg-white dark:text-black" };
 const GITHUB: TagSpec = { label: "GitHub", Icon: GHIcon, chip: "bg-[#24292f] text-white" };
 const PENDING: TagSpec = { label: "Saving…", Icon: (p) => <LoaderCircle {...p} className="animate-spin" />, chip: "bg-white/25 text-white" };
@@ -120,6 +123,8 @@ function specFor(item: Card): TagSpec {
       return LINK;
     case "github":
       return GITHUB;
+    case "product":
+      return PRODUCT;
     default:
       return ARTICLE;
   }
@@ -190,7 +195,7 @@ function isVideo(item: Card) {
   );
 }
 
-function ImageTile({ item, spec }: { item: Card; spec: TagSpec }) {
+function ImageTile({ item, spec, price }: { item: Card; spec: TagSpec; price?: ProductInfo }) {
   return (
     <div className={TILE} style={{ aspectRatio: imageAspect(item) }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -209,6 +214,16 @@ function ImageTile({ item, spec }: { item: Card; spec: TagSpec }) {
             <Play size={17} className="ml-0.5" fill="currentColor" />
           </span>
         </div>
+      ) : null}
+      {price ? (
+        <span className="absolute right-2 top-2 inline-flex items-baseline gap-1.5 rounded-full bg-stone-950/80 px-2.5 py-1 text-[13px] font-bold text-white backdrop-blur-md">
+          {price.compareAtPrice !== undefined && price.price !== undefined && price.compareAtPrice > price.price ? (
+            <span className="text-[10.5px] font-normal text-white/55 line-through">
+              {formatPrice(price.compareAtPrice, price.currency)}
+            </span>
+          ) : null}
+          {priceLabel(price)}
+        </span>
       ) : null}
       <TagSlot spec={spec} />
     </div>
@@ -254,13 +269,13 @@ function TweetTile({ item }: { item: Card }) {
   );
 }
 
-/** Articles and links that came without a picture. */
-function CoverTile({ item, spec }: { item: Card; spec: TagSpec }) {
+/** Articles, links and products that came without a picture. */
+function CoverTile({ item, spec, price }: { item: Card; spec: TagSpec; price?: ProductInfo }) {
   const domain = item.sourceDomain ?? (item.url ? domainOf(item.url) : undefined) ?? spec.label;
   return (
     <div className={`relative flex aspect-square flex-col justify-center overflow-hidden rounded-2xl bg-gradient-to-br ${hueFor(domain)} p-4`}>
       <span className="font-serif text-[64px] italic leading-none text-white/90">{domain.slice(0, 1).toUpperCase()}</span>
-      <span className="mb-6 mt-1 truncate text-[13px] font-semibold text-white/85">{domain}</span>
+      <span className="mb-6 mt-1 truncate text-[13px] font-semibold text-white/85">{price ? priceLabel(price) : domain}</span>
       <TagSlot spec={spec} />
     </div>
   );
@@ -357,6 +372,8 @@ export function ItemCard({
   onOpen?: (item: Card) => void;
 }) {
   const spec = specFor(item);
+  const price = item.type === "product" ? productInfo(item.embedJson) : undefined;
+
   let tile: ReactNode;
   // Text-led tiles already show their words; a heading below would repeat.
   let showHeading = true;
@@ -373,12 +390,12 @@ export function ItemCard({
     tile = <GitHubTile item={item} />;
     showHeading = false;
   } else if (item.thumbnailUrl) {
-    tile = <ImageTile item={item} spec={spec} />;
+    tile = <ImageTile item={item} spec={spec} price={price} />;
   } else if (item.type === "tweet") {
     tile = <TweetTile item={item} />;
     showHeading = false;
   } else {
-    tile = <CoverTile item={item} spec={spec} />;
+    tile = <CoverTile item={item} spec={spec} price={price} />;
   }
 
   const heading =
@@ -433,17 +450,20 @@ const TYPE_NAMES: Record<Card["type"], string> = {
   link: "Link",
   document: "Document",
   github: "GitHub",
+  product: "Product",
 };
 
-/** What a screen reader announces for a card: kind, title, source, age. */
+/** What a screen reader announces for a card: kind, title, source, price, age. */
 function cardLabel(item: Card): string {
   if (item.status === "pending") return `Saving ${item.url ? (domainOf(item.url) ?? "memory") : "memory"}`;
   const title = item.title ?? item.preview?.slice(0, 120) ?? item.url ?? "Untitled";
+  const price = item.type === "product" ? productInfo(item.embedJson) : undefined;
   return [
     item.status === "failed" ? "Couldn't save" : TYPE_NAMES[item.type],
     title,
     item.author ? `by ${item.author.replace(/^@/, "")}` : undefined,
     item.sourceDomain,
+    price ? priceLabel(price) : undefined,
     `saved ${timeAgo(item.savedAt)}`,
   ]
     .filter(Boolean)

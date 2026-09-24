@@ -25,6 +25,7 @@ function buildTaggingInput(item: ItemDoc): string | undefined {
     case "github":
     case "image":
     case "document":
+    case "product":
       return `${title}${text ? `\n\n${text}` : ""}`.slice(0, 6000).trim() || undefined;
     default:
       return undefined;

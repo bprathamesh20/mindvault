@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { DocumentPreview } from "../../../components/DocumentPreview";
+import { formatPrice, priceLabel, productInfo } from "../../../lib/product";
 
 export default function ItemPage() {
   const params = useParams<{ id: string }>();
@@ -44,6 +45,9 @@ export default function ItemPage() {
     );
   }
 
+  const product =
+    item.type === "product" ? productInfo(item.embedJson) : undefined;
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-2xl px-6 pb-24 pt-10">
       <Link
@@ -73,11 +77,40 @@ export default function ItemPage() {
         )}
       </p>
 
+      {product ? (
+        <p className="mt-4 flex items-baseline gap-3">
+          <span className="text-2xl font-semibold tracking-tight">
+            {priceLabel(product)}
+          </span>
+          {product.compareAtPrice !== undefined &&
+          product.price !== undefined &&
+          product.compareAtPrice > product.price ? (
+            <span className="text-sm text-stone-400 line-through dark:text-stone-500">
+              {formatPrice(product.compareAtPrice, product.currency)}
+            </span>
+          ) : null}
+          {product.availability ? (
+            <span className="text-sm text-stone-500 dark:text-stone-400">
+              {product.availability}
+            </span>
+          ) : null}
+        </p>
+      ) : null}
+
       {item.summary && (
         <p className="mt-6 border-l-2 border-stone-300 pl-4 font-serif text-[15px] italic leading-relaxed text-stone-600 dark:border-stone-700 dark:text-stone-400">
           {item.summary}
         </p>
       )}
+
+      {item.type === "product" && item.thumbnailUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={item.thumbnailUrl}
+          alt={item.title ?? ""}
+          className="mt-8 max-h-[420px] w-auto max-w-full rounded-xl border border-stone-200 dark:border-stone-800"
+        />
+      ) : null}
 
       {item.type === "youtube" &&
       typeof item.embedJson === "object" &&

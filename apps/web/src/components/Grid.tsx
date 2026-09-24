@@ -14,6 +14,7 @@ const FILTERS = [
   { label: "Tweets", value: "tweet" },
   { label: "Instagram", value: "instagram" },
   { label: "YouTube", value: "youtube" },
+  { label: "Products", value: "product" },
   { label: "Documents", value: "document" },
   { label: "GitHub", value: "github" },
   { label: "Notes", value: "note" },

@@ -6,6 +6,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { optimisticPatchItem, optimisticRemoveItem } from "../lib/optimistic";
 import { DocumentPreview } from "./DocumentPreview";
+import { formatPrice, priceLabel, productInfo } from "../lib/product";
 import type { Card } from "./types";
 
 function timeAgo(savedAt: number): string {
@@ -181,6 +182,7 @@ export function ItemModal({
   const isYouTube = it.type === "youtube";
   const isInstagram = it.type === "instagram";
   const isDocument = it.type === "document";
+  const product = it.type === "product" ? productInfo(it.embedJson) : undefined;
   const openUrl = it.url ?? it.fileUrl;
 
   async function commitTag() {
@@ -359,6 +361,26 @@ export function ItemModal({
               )}
             </p>
           </div>
+
+          {product ? (
+            <div className="flex items-baseline gap-2.5">
+              <span className="text-xl font-semibold tracking-tight text-stone-900 dark:text-[#f1f1f4]">
+                {priceLabel(product)}
+              </span>
+              {product.compareAtPrice !== undefined &&
+              product.price !== undefined &&
+              product.compareAtPrice > product.price ? (
+                <span className="text-sm text-stone-400 line-through dark:text-[#6e6e7a]">
+                  {formatPrice(product.compareAtPrice, product.currency)}
+                </span>
+              ) : null}
+              {product.availability ? (
+                <span className="text-xs text-stone-500 dark:text-[#9b9ba4]">
+                  {product.availability}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
 
           {it.summary && (
             <div>

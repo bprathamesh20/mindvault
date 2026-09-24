@@ -1,437 +1,351 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  BackHandler,
-  KeyboardAvoidingView,
-  Modal,
+  Animated,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
-import { FlashList } from "@shopify/flash-list";
+import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
-import { useMutation, usePaginatedQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useConvexAuth } from "@convex-dev/auth/react";
-import { useShareIntentContext } from "expo-share-intent";
-import { api } from "../../lib/backend";
-import type { Card } from "../../lib/types";
-import { ItemCard } from "../../components/item-card";
-import { setCardSeed } from "../../lib/card-seed";
-import { SignIn } from "../../components/sign-in";
-import { Toast } from "../../components/toast";
-import { colors, fonts, radius } from "../../lib/theme";
-import { CONVEX_URL } from "../../lib/convex-url";
+import { api, type Id } from "../../lib/backend";
+import { type Card, TYPE_FILTERS, typeLabel } from "../../lib/types";
+import { CardFeed } from "../../components/card-feed";
+import { Button, EmptyState, FilterChip, LargeTitle } from "../../components/ui";
+import { haptics } from "../../lib/haptics";
+import { useActionSheet } from "../../components/action-sheet";
+import { usePrompt } from "../../components/prompt";
+import { useToast } from "../../components/toast";
+import { setVaultFilter, useVaultFilter } from "../../lib/vault-filter";
+import { fonts, type Palette, radius, useStyles, useTheme } from "../../lib/theme";
 
-const URL_RE = /^(https?:\/\/|www\.)\S+$/i;
+const PAGE = 24;
+const COMPACT_AFTER = 44;
 
-export default function Home() {
-  const { isLoading, isAuthenticated } = useConvexAuth();
-
-  if (!CONVEX_URL) return <SetupNeeded />;
-  if (isLoading)
-    return (
-      <Center>
-        <Text style={styles.muted}>Opening your vault…</Text>
-      </Center>
-    );
-  if (!isAuthenticated) return <SignIn />;
-  return <HomeScreen />;
-}
-
-function HomeScreen() {
+export default function VaultScreen() {
   const router = useRouter();
+  const c = useTheme();
+  const styles = useStyles(makeStyles);
+  const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
-  const captureUrl = useMutation(api.items.captureUrl);
-  const captureNote = useMutation(api.items.captureNote);
-  const [captureOpen, setCaptureOpen] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filter = useVaultFilter();
+  const toast = useToast();
+  const prompt = usePrompt();
+  const showSheet = useActionSheet();
+
+  const spaces = useQuery(api.spaces.list);
+  const createSpace = useMutation(api.spaces.create);
+  const removeSpace = useMutation(api.spaces.remove);
 
   const { results, status, loadMore, isLoading } = usePaginatedQuery(
     api.items.list,
-    {},
-    { initialNumItems: 20 },
+    { type: filter.type, tag: filter.tag },
+    { initialNumItems: PAGE },
   );
+  const cards = results as Card[];
 
-  const { hasShareIntent, shareIntent, resetShareIntent } =
-    useShareIntentContext();
-
-  const flash = useCallback((message: string) => {
-    setToast(message);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2400);
+  // The large title scrolls away; a compact bar fades in to replace it.
+  const [compact, setCompact] = useState(false);
+  const barOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(barOpacity, { toValue: compact ? 1 : 0, duration: 160, useNativeDriver: true }).start();
+  }, [compact, barOpacity]);
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const next = e.nativeEvent.contentOffset.y > COMPACT_AFTER;
+    setCompact((prev) => (prev === next ? prev : next));
   }, []);
 
-  const capture = useCallback(
-    async (raw: string, fromShare = false) => {
-      const v = raw.trim();
-      if (!v) return;
-      setSaving(true);
-      try {
-        let message: string;
-        if (URL_RE.test(v)) {
-          const res = await captureUrl({ url: v });
-          message =
-            res.outcome === "duplicate"
-              ? "Already in your vault ✓"
-              : res.outcome === "retrying"
-                ? "Retrying…"
-                : "Saved to your vault";
-        } else {
-          await captureNote({ text: v });
-          message = "Note saved";
-        }
-        flash(message);
-        if (fromShare) {
-          setTimeout(() => BackHandler.exitApp(), 250);
-        }
-      } catch (err) {
-        flash(err instanceof Error ? err.message : "Could not save that");
-      } finally {
-        setSaving(false);
-      }
-    },
-    [captureUrl, captureNote, flash],
-  );
+  const filterActive = filter.type !== undefined || filter.tag !== undefined;
+  const activeSpace = spaces?.find((s) => s.id === filter.spaceId);
+  const subtitle = activeSpace
+    ? activeSpace.name
+    : [filter.type ? typeLabel(filter.type) : undefined, filter.tag ? `#${filter.tag}` : undefined]
+        .filter(Boolean)
+        .join(" · ") || undefined;
 
-  const lastShared = useRef<string | null>(null);
+  const newMemory = () => router.push("/capture");
 
-  useEffect(() => {
-    if (!hasShareIntent) return;
-    const target = (shareIntent.webUrl ?? shareIntent.text ?? "").trim();
-    if (target.length === 0) return;
-    if (lastShared.current === target) return;
-    lastShared.current = target;
-    resetShareIntent();
-    void capture(target, true);
-  }, [hasShareIntent, shareIntent, capture, resetShareIntent]);
-
-  async function save() {
-    const v = draft;
-    setDraft("");
-    setCaptureOpen(false);
-    await capture(v);
+  function saveAsSpace() {
+    prompt({
+      title: "New space",
+      message: `Save “${subtitle ?? "this view"}” so you can come back to it in one tap.`,
+      placeholder: "Space name",
+      confirmLabel: "Save",
+      onSubmit: (name) => {
+        void createSpace({ name, type: filter.type, tag: filter.tag })
+          .then((id) => {
+            setVaultFilter({ ...filter, spaceId: id });
+            toast(`Space “${name}” saved`);
+          })
+          .catch((err: unknown) => toast(err instanceof Error ? err.message : "Couldn't save that Space", "error"));
+      },
+    });
   }
 
-  const openItem = useCallback(
-    (item: Card) => {
-      setCardSeed(item);
-      router.push({ pathname: "/item/[id]", params: { id: item.id } });
-    },
-    [router],
-  );
+  function spaceMenu(space: { id: Id<"spaces">; name: string }) {
+    showSheet({
+      title: space.name,
+      actions: [
+        {
+          label: "Delete Space",
+          icon: "trash-outline",
+          destructive: true,
+          onPress: () => {
+            void removeSpace({ id: space.id }).then(() => {
+              if (filter.spaceId === space.id) setVaultFilter({});
+              toast("Space deleted");
+            });
+          },
+        },
+      ],
+    });
+  }
 
-  const renderItem = useCallback(
-    ({ item }: { item: Card }) => (
-      <View style={styles.cell}>
-        <ItemCard item={item} onPress={openItem} />
-      </View>
-    ),
-    [openItem],
-  );
-
-  const listPadding = useMemo(
-    () => ({
-      paddingHorizontal: 10,
-      paddingBottom: tabBarHeight + 72,
-    }),
-    [tabBarHeight],
-  );
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.wordmark}>MindVault</Text>
-      </View>
+  const header = (
+    <View style={[styles.header, { paddingTop: insets.top }]}>
+      <LargeTitle title="mindvault" subtitle={subtitle} />
 
       <Pressable
-        style={({ pressed }) => [styles.searchBar, pressed && styles.pressed]}
-        onPress={() => router.push("/search")}
+        accessibilityRole="search"
+        accessibilityLabel="Search your vault"
+        onPress={() => router.navigate("/search")}
+        style={({ pressed }) => [styles.searchPill, pressed && styles.pressed]}
       >
-        <Ionicons name="search" size={16} color={colors.textFaint} />
-        <Text style={styles.searchPlaceholder}>Search your vault…</Text>
+        <Ionicons name="search" size={17} color={c.placeholder} />
+        <Text style={styles.searchPillText}>Search my vault…</Text>
       </Pressable>
 
-      <FlashList
-        masonry
-        numColumns={2}
-        data={(results ?? []) as Card[]}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={listPadding}
+      {spaces && spaces.length > 0 ? (
+        <>
+          <Text style={styles.rowLabel} accessibilityRole="header">
+            Spaces
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {spaces.map((s) => (
+              <Pressable
+                key={s.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected: filter.spaceId === s.id }}
+                accessibilityHint="Shows this saved view. Long press to delete."
+                onLongPress={() => spaceMenu(s)}
+                onPress={() =>
+                  filter.spaceId === s.id ? setVaultFilter({}) : setVaultFilter({ type: s.type, tag: s.tag, spaceId: s.id })
+                }
+                style={({ pressed }) => [
+                  styles.spaceCard,
+                  filter.spaceId === s.id && styles.spaceCardActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons name="sparkles" size={14} color={filter.spaceId === s.id ? c.text : c.textMuted} />
+                <Text style={[styles.spaceText, filter.spaceId === s.id && { color: c.text }]} numberOfLines={1}>
+                  {s.name}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </>
+      ) : null}
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={[styles.chipRow, styles.filterRow]}
+        accessibilityLabel="Filter by type"
+      >
+        {filter.tag ? (
+          <FilterChip
+            label={`#${filter.tag}`}
+            selected
+            onPress={() => {}}
+            onRemove={() => setVaultFilter({ type: filter.type })}
+            accessibilityHint="Removes the tag filter"
+          />
+        ) : null}
+        {TYPE_FILTERS.map((f) => (
+          <FilterChip
+            key={f.label}
+            label={f.label}
+            selected={filter.type === f.value && !filter.spaceId}
+            onPress={() => setVaultFilter({ type: f.value, tag: filter.tag })}
+          />
+        ))}
+      </ScrollView>
+
+      {filterActive && !filter.spaceId ? (
+        <View style={styles.saveSpaceRow}>
+          <FilterChip label="Save view as Space" icon="add" dashed onPress={saveAsSpace} />
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const empty = isLoading ? (
+    <View style={styles.loading}>
+      <ActivityIndicator color={c.textFaint} />
+    </View>
+  ) : filterActive ? (
+    <EmptyState
+      icon="funnel-outline"
+      title="Nothing here yet."
+      action={<Button title="Show everything" variant="tinted" onPress={() => setVaultFilter({})} />}
+    />
+  ) : (
+    <EmptyState
+      icon="sparkles-outline"
+      title="Your vault is empty."
+      body="Save a link, jot a note, or upload a document. You can also share straight into MindVault from any app."
+      action={<Button title="New memory" icon="add" onPress={newMemory} />}
+    />
+  );
+
+  const footer =
+    status === "LoadingMore" ? (
+      <View style={styles.loadingMore}>
+        <ActivityIndicator color={c.textFaint} />
+      </View>
+    ) : null;
+
+  return (
+    <View style={styles.container}>
+      <CardFeed
+        data={cards}
+        header={header}
+        empty={empty}
+        footer={footer}
+        bottomInset={tabBarHeight + 74}
+        onScroll={onScroll}
         onEndReached={() => {
-          if (status === "CanLoadMore") loadMore(20);
+          if (status === "CanLoadMore") loadMore(PAGE);
         }}
-        onEndReachedThreshold={0.4}
-        ListEmptyComponent={
-          isLoading ? (
-            <Center style={styles.emptyWrap}>
-              <ActivityIndicator color={colors.textFaint} />
-            </Center>
-          ) : (
-            <Center style={styles.emptyWrap}>
-              <Ionicons name="sparkles-outline" size={34} color={colors.borderStrong} />
-              <Text style={styles.emptyTitle}>Your vault is empty.</Text>
-              <Text style={styles.emptyBody}>
-                Tap ＋ to save a link,{"\n"}or share one from any app.
-              </Text>
-            </Center>
-          )
-        }
       />
 
-      <Toast message={toast} />
+      <Animated.View
+        pointerEvents={compact ? "auto" : "none"}
+        style={[styles.compactBar, { paddingTop: insets.top, opacity: barOpacity }]}
+        accessibilityElementsHidden={!compact}
+        importantForAccessibility={compact ? "auto" : "no-hide-descendants"}
+      >
+        {Platform.OS === "ios" ? (
+          <BlurView
+            tint={c.scheme === "dark" ? "systemChromeMaterialDark" : "systemChromeMaterialLight"}
+            intensity={100}
+            style={StyleSheet.absoluteFill}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: c.surface }]} />
+        )}
+        <View style={styles.compactInner}>
+          <View style={styles.compactSide} />
+          <Text style={styles.compactTitle} numberOfLines={1} accessibilityRole="header">
+            {subtitle ?? "mindvault"}
+          </Text>
+          <View style={styles.compactSide} />
+        </View>
+      </Animated.View>
 
+      {/* In the thumb zone, where the web app keeps its ＋ too. */}
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="New memory"
+        accessibilityHint="Save a link, note or document"
+        onPress={() => {
+          haptics.light();
+          newMemory();
+        }}
         style={({ pressed }) => [
           styles.fab,
-          { bottom: tabBarHeight + 16 },
+          { bottom: (Platform.OS === "ios" ? tabBarHeight : 0) + 16 },
           pressed && styles.fabPressed,
         ]}
-        onPress={() => setCaptureOpen(true)}
       >
-        <Ionicons name="add" size={28} color={colors.inverseText} />
+        <Ionicons name="add" size={30} color={c.inverseText} />
       </Pressable>
-
-      <Modal
-        visible={captureOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setCaptureOpen(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.sheetBackdrop}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setCaptureOpen(false)}
-          />
-          <View style={[styles.sheet, { paddingBottom: 40 }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>New memory</Text>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Paste a link or jot a thought…"
-              placeholderTextColor={colors.textFaint}
-              style={styles.sheetInput}
-              multiline
-              autoFocus
-            />
-            <View style={styles.detectRow}>
-              <Ionicons
-                name={URL_RE.test(draft.trim()) ? "link" : "pencil"}
-                size={13}
-                color={colors.textFaint}
-              />
-              <Text style={styles.detectText}>
-                {draft.trim()
-                  ? URL_RE.test(draft.trim())
-                    ? "Link — will be extracted & tagged automatically"
-                    : "Will be saved as a note"
-                  : "Links get extracted & tagged automatically"}
-              </Text>
-            </View>
-            <View style={styles.sheetActions}>
-              <Pressable
-                style={styles.sheetCancel}
-                onPress={() => setCaptureOpen(false)}
-              >
-                <Text style={styles.sheetCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.sheetSave,
-                  (!draft.trim() || saving) && styles.buttonDisabled,
-                ]}
-                onPress={() => void save()}
-                disabled={!draft.trim() || saving}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" color={colors.inverseText} />
-                ) : (
-                  <Text style={styles.sheetSaveText}>Save to my vault</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
-function SetupNeeded() {
-  return (
-    <Center>
-      <Text style={styles.wordmark}>MindVault</Text>
-      <Text style={styles.emptyBody}>
-        Set EXPO_PUBLIC_CONVEX_URL in apps/mobile/.env.local to your Convex
-        deployment URL, then reload.
-      </Text>
-    </Center>
-  );
-}
-
-function Center({
-  children,
-  style,
-}: {
-  children: React.ReactNode;
-  style?: object;
-}) {
-  return <View style={[styles.center, style]}>{children}</View>;
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 32,
-    gap: 10,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingLeft: 14,
-    paddingRight: 8,
-    paddingTop: 6,
-    paddingBottom: 12,
-  },
-  wordmark: {
-    fontFamily: fonts.serif,
-    fontSize: 26,
-    fontWeight: "700",
-    color: colors.text,
-    letterSpacing: -0.5,
-  },
-  sparkButton: { padding: 8, borderRadius: radius.full },
-  pressed: { opacity: 0.6 },
-  cell: { paddingHorizontal: 4, paddingBottom: 10 },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    borderRadius: radius.full,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    marginHorizontal: 14,
-    marginBottom: 10,
-  },
-  searchPlaceholder: { fontSize: 14, color: colors.textFaint },
-  emptyWrap: { marginTop: 80 },
-  emptyTitle: {
-    fontFamily: fonts.serif,
-    fontSize: 22,
-    fontStyle: "italic",
-    color: colors.textFaint,
-  },
-  emptyBody: {
-    fontSize: 13,
-    color: colors.textFaint,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  muted: { color: colors.textFaint, fontStyle: "italic" },
-  fab: {
-    position: "absolute",
-    right: 20,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: colors.inverse,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  fabPressed: { transform: [{ scale: 0.94 }], opacity: 0.9 },
-  sheetBackdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(12,10,9,0.45)",
-  },
-  sheet: {
-    backgroundColor: colors.bg,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingTop: 10,
-    paddingHorizontal: 22,
-  },
-  sheetHandle: {
-    alignSelf: "center",
-    width: 38,
-    height: 4.5,
-    borderRadius: 3,
-    backgroundColor: colors.borderStrong,
-    marginBottom: 16,
-  },
-  sheetTitle: {
-    fontFamily: fonts.serif,
-    fontSize: 19,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 14,
-  },
-  sheetInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 15,
-    minHeight: 92,
-    textAlignVertical: "top",
-    lineHeight: 21,
-  },
-  detectRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 10,
-  },
-  detectText: { fontSize: 11.5, color: colors.textFaint, flexShrink: 1 },
-  sheetActions: { flexDirection: "row", gap: 10, marginTop: 18 },
-  sheetCancel: {
-    borderRadius: radius.full,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: "center",
-  },
-  sheetCancelText: { color: colors.textMuted, fontSize: 14, fontWeight: "500" },
-  sheetSave: {
-    flex: 1,
-    borderRadius: radius.full,
-    backgroundColor: colors.inverse,
-    paddingVertical: 13,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonDisabled: { opacity: 0.4 },
-  sheetSaveText: {
-    color: colors.inverseText,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-});
+const makeStyles = (c: Palette) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.bg },
+    header: { marginHorizontal: -10, paddingBottom: 6 },
+    pressed: { opacity: 0.6 },
+    searchPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginHorizontal: 16,
+      minHeight: 44,
+      borderRadius: radius.full,
+      paddingHorizontal: 14,
+      backgroundColor: c.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.border,
+    },
+    searchPillText: { fontFamily: fonts.serifItalic, fontSize: 19, color: c.placeholder },
+    rowLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: c.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      marginLeft: 20,
+      marginTop: 20,
+      marginBottom: 8,
+    },
+    chipRow: { paddingHorizontal: 16, gap: 8 },
+    filterRow: { paddingTop: 16, paddingBottom: 6 },
+    spaceCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      minHeight: 38,
+      maxWidth: 220,
+      paddingHorizontal: 14,
+      borderRadius: radius.full,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    spaceCardActive: { backgroundColor: c.elevated, borderColor: c.borderStrong },
+    spaceText: { fontSize: 15, color: c.textMuted, flexShrink: 1 },
+    saveSpaceRow: { flexDirection: "row", paddingHorizontal: 16, paddingTop: 6 },
+    loading: { paddingVertical: 80, alignItems: "center" },
+    loadingMore: { paddingVertical: 24, alignItems: "center" },
+    compactBar: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      top: 0,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.separator,
+      overflow: "hidden",
+    },
+    compactInner: { height: 44, flexDirection: "row", alignItems: "center", paddingHorizontal: 6 },
+    compactSide: { width: 60 },
+    fab: {
+      position: "absolute",
+      right: 20,
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      backgroundColor: c.inverse,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOpacity: c.scheme === "dark" ? 0.5 : 0.22,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 8,
+    },
+    fabPressed: { transform: [{ scale: 0.94 }], opacity: 0.9 },
+    compactTitle: { flex: 1, textAlign: "center", fontFamily: fonts.serifItalic, fontSize: 21, color: c.text },
+  });

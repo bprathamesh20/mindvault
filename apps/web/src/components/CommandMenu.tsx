@@ -49,6 +49,7 @@ const TYPE_FILTERS: Array<{ label: string; value: ItemType | undefined }> = [
   { label: "Images", value: "image" },
   { label: "Links", value: "link" },
   { label: "GitHub", value: "github" },
+  { label: "Products", value: "product" },
 ];
 
 /** Mounted only while open, so every ⌘K starts from a clean slate. */
