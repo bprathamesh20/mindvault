@@ -58,14 +58,20 @@ export function productInfo(embedJson: unknown): ProductInfo | undefined {
   return info;
 }
 
+// "symbol", not "narrowSymbol": narrow renders USD, AUD, CAD and SGD all as
+// a bare "$", which is wrong in a vault that mixes stores and currencies.
+// Unknown currency → plain number rather than guessing dollars.
 export function formatPrice(amount: number, currency?: string): string {
+  const whole = Number.isInteger(amount)
+    ? { minimumFractionDigits: 0, maximumFractionDigits: 0 }
+    : {};
   try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency ?? "USD",
-      currencyDisplay: "narrowSymbol",
-      maximumFractionDigits: Number.isInteger(amount) ? 0 : 2,
-    }).format(amount);
+    return new Intl.NumberFormat(
+      undefined,
+      currency
+        ? { style: "currency", currency, currencyDisplay: "symbol", ...whole }
+        : whole,
+    ).format(amount);
   } catch {
     return currency ? `${currency} ${amount}` : String(amount);
   }

@@ -125,7 +125,18 @@ Re-pasting a URL: `duplicate` if ready, `retrying` (reset+re-enrich) if failed.
   `product:price:*` meta, a JSON-LD `Product` node, or microdata) is
   reclassified at enrich time — `persistMeta` accepts a `type` override.
   Price/currency/brand/availability land in `embedJson` (`provider:"product"`);
-  cards render a price pill from it.
+  cards render a price pill from it. `og:type=product.group` is a category
+  page, not a product. Priceless Shopify pages get filled from
+  `/products/{handle}.js`; Amazon has no structured data, so it has its own
+  DOM parser (and often serves bots a priceless page). Flipkart and Uniqlo
+  render prices client-side and don't work. Shopify geo-redirects by IP, so
+  prices come back in the fetching server's market currency.
+- **Jina** (`r.jina.ai`): never send a browser UA (it 403s). Use
+  `Accept: application/json` and check `data.httpStatus`: Jina answers 200
+  even when the target blocked it. `X-Return-Format: html` returns the
+  rendered HTML, which is how Lego/Waterstones-style 403ing stores still parse.
+- Price display uses `currencyDisplay: "symbol"`, not `narrowSymbol` (narrow
+  shows USD/AUD/CAD all as a bare "$").
 - Thumbnails: skip silently on failure — extraction must never fail because of
   a missing image.
 
