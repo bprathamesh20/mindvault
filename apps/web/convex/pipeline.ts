@@ -236,6 +236,23 @@ async function fetchYouTubeTranscript(videoId: string): Promise<string | undefin
   return undefined;
 }
 
+const SLIM_MAX_CHARS = 4_000_000;
+
+/** Strip what the parsers never read before building a DOM. Some Shopify
+ * themes inline the full product JSON into a data-* attribute on every
+ * swatch — Altra's product page is 21 MB, 18 MB of it one attribute —
+ * and parsing that peaks near 1 GB, past the 512 MB action limit, so the
+ * action dies without marking the item failed. JSON-LD scripts stay. */
+function slimHtml(html: string): string {
+  const slim = html
+    .replace(/<script\b(?![^>]*ld\+json)[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<(style|svg)\b[^>]*>[\s\S]*?<\/\1>/gi, "")
+    .replace(/\s[\w:.-]+\s*=\s*"[^"]{10000,}"/g, "")
+    .replace(/\s[\w:.-]+\s*=\s*'[^']{10000,}'/g, "");
+  // og-tags live in <head>, so a hard cap still keeps the card.
+  return slim.length > SLIM_MAX_CHARS ? slim.slice(0, SLIM_MAX_CHARS) : slim;
+}
+
 type JinaPage = { title?: string; content?: string; html?: string };
 
 /** Fetch a page through r.jina.ai (free reader, real browser). Returns
@@ -274,6 +291,7 @@ async function extractArticle(url: URL): Promise<Extracted> {
     const res = await fetch(url.href, {
       headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" },
       redirect: "follow",
+      signal: AbortSignal.timeout(30000),
     });
     if (res.ok) {
       const contentType = res.headers.get("content-type") ?? "";
@@ -290,7 +308,8 @@ async function extractArticle(url: URL): Promise<Extracted> {
   html ??= (await fetchJina(url, "html"))?.html;
 
   if (html) {
-    const $ = cheerio.load(html);
+    const slim = slimHtml(html);
+    const $ = cheerio.load(slim);
     const ogTitle = $('meta[property="og:title"]').attr("content") ?? undefined;
     const ogDesc =
       $('meta[property="og:description"]').attr("content") ?? undefined;
@@ -304,7 +323,7 @@ async function extractArticle(url: URL): Promise<Extracted> {
     let readerHtml: string | undefined;
 
     try {
-      const { document } = parseHTML(html);
+      const { document } = parseHTML(slim);
       const article = new Readability(document as unknown as Document).parse();
       if (article) {
         parsedTitle = article.title ?? undefined;
@@ -318,7 +337,9 @@ async function extractArticle(url: URL): Promise<Extracted> {
 
     // Product pages reclassify the item: card shows price + buy link instead
     // of reader prose, so we don't bother storing reader HTML for them.
-    let product = parseAmazonProduct($, url) ?? parseProduct($);
+    // ?variant= pins the colour/size the user saved (Shopify and others).
+    const variantId = url.searchParams.get("variant") ?? undefined;
+    let product = parseAmazonProduct($, url) ?? parseProduct($, variantId);
     // Shopify themes often tag the page og:type=product but render the price
     // client-side — fill the gaps from the store's own product JSON.
     if (product?.price === undefined) {
@@ -336,7 +357,9 @@ async function extractArticle(url: URL): Promise<Extracted> {
         ),
         author: product.brand,
         text: description ?? ogDesc ?? textContent,
+        // og:image shows the default variant; a pinned variant has its own.
         thumbnailUrl:
+          (variantId && image ? absolute(image, url.href) : undefined) ??
           (ogImage ? absolute(ogImage, url.href) : undefined) ??
           (image ? absolute(image, url.href) : undefined),
         embedJson: {
@@ -680,6 +703,29 @@ function decodeEntities(s: string | undefined): string | undefined {
   return document.querySelector("span")?.textContent ?? s;
 }
 
+/** The hasVariant entry for a ?variant= id — Shopify puts it in the
+ * variant's @id ("…#48061035380903") and its offer URL. */
+function ldVariant(
+  group: Record<string, unknown>,
+  variantId: string,
+): Record<string, unknown> | undefined {
+  if (!Array.isArray(group.hasVariant)) return undefined;
+  return (group.hasVariant as unknown[]).find(
+    (v): v is Record<string, unknown> => {
+      if (!v || typeof v !== "object") return false;
+      const id = (v as Record<string, unknown>)["@id"];
+      if (typeof id === "string" && id.endsWith(`#${variantId}`)) return true;
+      let offers = (v as Record<string, unknown>).offers;
+      if (Array.isArray(offers)) offers = offers[0];
+      const offerUrl =
+        offers && typeof offers === "object"
+          ? (offers as Record<string, unknown>).url
+          : undefined;
+      return typeof offerUrl === "string" && offerUrl.includes(`variant=${variantId}`);
+    },
+  );
+}
+
 function ldImage(node: Record<string, unknown>): string | undefined {
   const img = node.image;
   const first = Array.isArray(img) ? img[0] : img;
@@ -727,6 +773,7 @@ function offerFields(node: Record<string, unknown>): {
  * carries no product signals (og:type, JSON-LD Product, price meta). */
 function parseProduct(
   $: ReturnType<typeof cheerio.load>,
+  variantId?: string,
 ): ProductInfo | undefined {
   const meta = (name: string) =>
     $(`meta[property="${name}"], meta[name="${name}"]`).attr("content") ??
@@ -743,7 +790,10 @@ function parseProduct(
       // malformed JSON-LD — keep looking
     }
   });
-  const node = ld.product ?? ld.group;
+  const node =
+    (variantId && ld.group ? ldVariant(ld.group, variantId) : undefined) ??
+    ld.product ??
+    ld.group;
 
   // og:type "product.group" marks a category/listing page, not a product.
   const isProduct =
@@ -795,6 +845,7 @@ function parseProduct(
       parsePrice(meta("product:pretax_price:amount")),
     brand:
       (node ? decodeEntities(ldBrand(node)) : undefined) ??
+      (ld.group ? decodeEntities(ldBrand(ld.group)) : undefined) ??
       meta("og:brand") ??
       meta("product:brand"),
     availability:

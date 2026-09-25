@@ -135,6 +135,10 @@ Re-pasting a URL: `duplicate` if ready, `retrying` (reset+re-enrich) if failed.
   `Accept: application/json` and check `data.httpStatus`: Jina answers 200
   even when the target blocked it. `X-Return-Format: html` returns the
   rendered HTML, which is how Lego/Waterstones-style 403ing stores still parse.
+- Parse `slimHtml(html)`, never raw HTML: some Shopify themes inline the full
+  product JSON on every swatch (Altra's page is 21 MB) and building that DOM
+  exceeds the 512 MB action memory. The action then dies without
+  `markFailed` and the item sits in "pending".
 - Price display uses `currencyDisplay: "symbol"`, not `narrowSymbol` (narrow
   shows USD/AUD/CAD all as a bare "$").
 - Thumbnails: skip silently on failure — extraction must never fail because of
