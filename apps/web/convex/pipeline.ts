@@ -236,6 +236,38 @@ async function fetchYouTubeTranscript(videoId: string): Promise<string | undefin
   return undefined;
 }
 
+type JinaPage = { title?: string; content?: string; html?: string };
+
+/** Fetch a page through r.jina.ai (free reader, real browser). Returns
+ * undefined when the target itself refused — Jina answers 200 either way
+ * and would otherwise hand back "IP address … is blocked" as the page.
+ * No browser UA here: Jina 403s requests that claim to be Chrome. */
+async function fetchJina(
+  url: URL,
+  format: "html" | "markdown",
+): Promise<JinaPage | undefined> {
+  try {
+    const res = await fetch(`https://r.jina.ai/${url.href}`, {
+      headers: { Accept: "application/json", "X-Return-Format": format },
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!res.ok) return undefined;
+    const json = (await res.json()) as { data?: Record<string, unknown> };
+    const data = json.data ?? {};
+    const status = typeof data.httpStatus === "number" ? data.httpStatus : 200;
+    const title = typeof data.title === "string" ? data.title.trim() : "";
+    // Bot walls render as an untitled page.
+    if (status >= 400 || !title) return undefined;
+    return {
+      title,
+      content: typeof data.content === "string" ? data.content : undefined,
+      html: typeof data.html === "string" ? data.html : undefined,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 async function extractArticle(url: URL): Promise<Extracted> {
   let html: string | undefined;
   try {
@@ -252,6 +284,10 @@ async function extractArticle(url: URL): Promise<Extracted> {
   } catch {
     // fall through to jina
   }
+  // Big retailers (Lego, Zalando, Bol, Decathlon…) 403 datacenter fetches.
+  // Jina renders the page in a real browser and hands back its HTML, so
+  // og-tags and JSON-LD still reach the parsers below.
+  html ??= (await fetchJina(url, "html"))?.html;
 
   if (html) {
     const $ = cheerio.load(html);
@@ -282,13 +318,22 @@ async function extractArticle(url: URL): Promise<Extracted> {
 
     // Product pages reclassify the item: card shows price + buy link instead
     // of reader prose, so we don't bother storing reader HTML for them.
-    const product =
-      parseProduct($) ?? (await extractShopifyProduct(url, html));
+    let product = parseAmazonProduct($, url) ?? parseProduct($);
+    // Shopify themes often tag the page og:type=product but render the price
+    // client-side — fill the gaps from the store's own product JSON.
+    if (product?.price === undefined) {
+      const shopify = await extractShopifyProduct(url, html);
+      if (shopify) product = { ...shopify, ...definedFields(product ?? {}) };
+    }
     if (product) {
       const { name, image, description, ...info } = product;
       return {
         type: "product",
-        title: stripSiteSuffix(ogTitle ?? name ?? parsedTitle, ogSiteName),
+        title: productTitle(
+          stripSiteSuffix(ogTitle, ogSiteName),
+          name,
+          parsedTitle,
+        ),
         author: product.brand,
         text: description ?? ogDesc ?? textContent,
         thumbnailUrl:
@@ -312,16 +357,12 @@ async function extractArticle(url: URL): Promise<Extracted> {
     };
   }
 
-  // Fallback: r.jina.ai reader (free, handles JS-heavy pages)
-  const jinaRes = await fetch(`https://r.jina.ai/${url.href}`, {
-    headers: { "User-Agent": UA },
-  });
-  if (!jinaRes.ok) throw new Error(`Fetch failed (${jinaRes.status})`);
-  const markdown = await jinaRes.text();
-  const titleMatch = markdown.match(/^Title:\s*(.+)$/m);
+  // Last resort: Jina's markdown reader.
+  const page = await fetchJina(url, "markdown");
+  if (!page) throw new Error("The site blocked the page fetch");
   return {
-    title: titleMatch?.[1]?.trim(),
-    text: markdown.slice(0, 100000),
+    title: page.title,
+    text: page.content?.slice(0, 100000),
   };
 }
 
@@ -496,6 +537,19 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   "£": "GBP",
   "¥": "JPY",
   "₩": "KRW",
+  "A$": "AUD",
+  "C$": "CAD",
+  "CA$": "CAD",
+  "S$": "SGD",
+  "HK$": "HKD",
+  "R$": "BRL",
+  "₺": "TRY",
+  "₽": "RUB",
+  "₱": "PHP",
+  "₫": "VND",
+  "zł": "PLN",
+  "Rs.": "INR",
+  "Rs": "INR",
 };
 
 function cleanCurrency(raw: unknown): string | undefined {
@@ -508,10 +562,20 @@ function cleanCurrency(raw: unknown): string | undefined {
 function parsePrice(raw: unknown): number | undefined {
   if (typeof raw === "number") return Number.isFinite(raw) ? raw : undefined;
   if (typeof raw !== "string") return undefined;
-  let s = raw.trim().replace(/[^\d.,]/g, "");
+  const trimmed = raw.trim();
+  let s = trimmed.replace(/[^\d.,]/g, "");
   if (!s) return undefined;
   const lastComma = s.lastIndexOf(",");
   const lastDot = s.lastIndexOf(".");
+  // Display strings like "1.299 €" or "₹1.23.456" group thousands with dots;
+  // machine values ("12.500") don't carry a symbol, so leave those alone.
+  if (
+    lastComma < 0 &&
+    (s.indexOf(".") !== lastDot ||
+      (s.length - lastDot - 1 === 3 && /[^\d.]/.test(trimmed)))
+  ) {
+    s = s.replace(/\./g, "");
+  }
   if (lastComma >= 0 && lastDot >= 0) {
     // Both separators: the rightmost one is the decimal point.
     s =
@@ -681,9 +745,10 @@ function parseProduct(
   });
   const node = ld.product ?? ld.group;
 
+  // og:type "product.group" marks a category/listing page, not a product.
   const isProduct =
     ogType === "product" ||
-    ogType.startsWith("product.") ||
+    (ogType.startsWith("product.") && ogType !== "product.group") ||
     node !== undefined ||
     meta("product:price:amount") !== undefined;
   if (!isProduct) return undefined;
@@ -831,6 +896,140 @@ async function extractShopifyProduct(
     image:
       typeof p.featured_image === "string" ? p.featured_image : undefined,
     description,
+  };
+}
+
+/** og:title is often the product name padded with store boilerplate
+ * ("The Botanical Garden 21353 | Ideas | Buy online at the Official LEGO®
+ * Shop US") — when it merely wraps the structured name, use the name. */
+function productTitle(
+  ogTitle: string | undefined,
+  name: string | undefined,
+  fallback: string | undefined,
+): string | undefined {
+  if (name && ogTitle?.toLowerCase().includes(name.toLowerCase())) return name;
+  return ogTitle ?? name ?? fallback;
+}
+
+function definedFields<T extends object>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;
+}
+
+const AMAZON_CURRENCY: Record<string, string> = {
+  com: "USD",
+  in: "INR",
+  "co.uk": "GBP",
+  de: "EUR",
+  fr: "EUR",
+  it: "EUR",
+  es: "EUR",
+  nl: "EUR",
+  be: "EUR",
+  ie: "EUR",
+  "co.jp": "JPY",
+  ca: "CAD",
+  "com.au": "AUD",
+  "com.mx": "MXN",
+  "com.br": "BRL",
+  ae: "AED",
+  sa: "SAR",
+  sg: "SGD",
+  se: "SEK",
+  pl: "PLN",
+  "com.tr": "TRY",
+};
+
+/** Amazon ships no JSON-LD or og:product tags, so read its product page DOM.
+ * Amazon sometimes serves bots a "currently unavailable" page without a
+ * price — the card still gets title, image and brand. */
+function parseAmazonProduct(
+  $: ReturnType<typeof cheerio.load>,
+  url: URL,
+): ProductInfo | undefined {
+  const tld = url.hostname.match(/(?:^|\.)amazon\.([a-z.]+)$/)?.[1];
+  if (!tld) return undefined;
+  const name = $("#productTitle").first().text().replace(/\s+/g, " ").trim();
+  if (!name) return undefined;
+
+  const priceText = [
+    "#corePrice_feature_div .a-price .a-offscreen",
+    "#corePriceDisplay_desktop_feature_div .a-price .a-offscreen",
+    "#apex_desktop .a-price .a-offscreen",
+    ".priceToPay .a-offscreen",
+    "#priceblock_dealprice",
+    "#priceblock_ourprice",
+    "#kindle-price",
+    "#price",
+  ]
+    .map((sel) => $(sel).first().text().trim())
+    .find((text) => /\d/.test(text));
+  const price = parsePrice(priceText);
+  const listPrice = parsePrice(
+    $("#corePriceDisplay_desktop_feature_div .basisPrice .a-offscreen")
+      .first()
+      .text(),
+  );
+
+  // data-a-dynamic-image is {"url": [w, h], …}; the last key is the largest.
+  let image = $("#landingImage").attr("data-old-hires") || undefined;
+  if (!image) {
+    try {
+      const sizes = JSON.parse(
+        $("#landingImage, #imgBlkFront, #ebooksImgBlkFront")
+          .first()
+          .attr("data-a-dynamic-image") ?? "{}",
+      ) as Record<string, unknown>;
+      image = Object.keys(sizes).pop();
+    } catch {
+      image = undefined;
+    }
+  }
+
+  // "Visit the Apple Store" / "Brand: Apple" → "Apple"
+  const byline = $("#bylineInfo").first().text().replace(/\s+/g, " ").trim();
+  const brand =
+    byline
+      .replace(/^Visit the\s+/i, "")
+      .replace(/\s+Store$/i, "")
+      .replace(/^Brand:\s*/i, "")
+      .trim() || undefined;
+
+  const stock = $("#availability").first().text().replace(/\s+/g, " ");
+  const availability =
+    price === undefined
+      ? undefined
+      : /in stock/i.test(stock)
+        ? "In stock"
+        : /only \d+ left/i.test(stock)
+          ? "Low stock"
+          : /unavailable|out of stock/i.test(stock)
+            ? "Out of stock"
+            : undefined;
+
+  const bullets = $("#feature-bullets li")
+    .map((_, el) => $(el).text().replace(/\s+/g, " ").trim())
+    .get()
+    .filter(Boolean)
+    .join(" ");
+
+  return {
+    name,
+    price,
+    currency:
+      AMAZON_CURRENCY[tld] ??
+      cleanCurrency(priceText?.replace(/[\d.,\s]/g, "")),
+    compareAtPrice:
+      listPrice !== undefined && price !== undefined && listPrice > price
+        ? listPrice
+        : undefined,
+    brand,
+    availability,
+    image,
+    description:
+      bullets ||
+      ($('meta[name="description"]').attr("content") ?? undefined),
   };
 }
 
