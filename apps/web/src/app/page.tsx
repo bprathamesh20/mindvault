@@ -298,6 +298,8 @@ export default function Home() {
             onOpen={openItem}
             type={filterType}
             onTypeChange={setFilterType}
+            suspended={showAsk || showResults}
+            searchQuery={showResults ? debounced : ""}
           />
         </div>
       </div>
