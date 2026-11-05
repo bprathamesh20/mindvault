@@ -46,6 +46,7 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Suggestion } from "@/components/ai-elements/suggestion";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeRail } from "@/components/ThemeRail";
+import { MobileTabBar } from "@/components/MobileTabBar";
 import { ItemModal } from "@/components/ItemModal";
 import SignIn from "@/components/SignIn";
 import {
@@ -124,13 +125,14 @@ export default function AskPage() {
 
   return (
     <TooltipProvider>
-      <main className="flex h-dvh flex-col md:pl-16">
+      <main className="flex h-dvh flex-col pb-[var(--tabbar)] md:pl-16">
         <ThemeRail />
+        <MobileTabBar />
 
-        <header className="flex items-center justify-between px-5 pt-5 md:px-8">
+        <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] md:px-8 md:pt-5">
           <Link
             href="/"
-            className="flex items-center gap-1.5 text-xs tracking-wide text-stone-400 transition hover:text-stone-600 dark:text-[#6b6b75] dark:hover:text-stone-300"
+            className="invisible flex items-center md:visible gap-1.5 text-xs tracking-wide text-stone-400 transition hover:text-stone-600 dark:text-[#6b6b75] dark:hover:text-stone-300"
           >
             <ArrowLeftIcon className="size-3.5" />
             Vault

@@ -96,7 +96,7 @@ export function SearchBar({
   }
 
   return (
-    <div className="px-8 pt-12 md:px-14">
+    <div className="px-6 pt-[calc(env(safe-area-inset-top)+2rem)] md:px-14 md:pt-12">
       <input
         ref={inputRef}
         value={value}
@@ -132,7 +132,7 @@ function PaletteChip({ onClick }: { onClick: () => void }) {
       type="button"
       onClick={onClick}
       title="Command menu"
-      className="rounded-full border border-stone-300 px-2 py-1 font-mono text-[10px] tracking-normal text-stone-400 transition hover:border-stone-500 hover:text-stone-600 dark:border-[#2a2a31] dark:text-[#6b6b75] dark:hover:border-[#5b5b64] dark:hover:text-stone-300"
+      className="hidden rounded-full border border-stone-300 px-2 py-1 font-mono md:inline-block text-[10px] tracking-normal text-stone-400 transition hover:border-stone-500 hover:text-stone-600 dark:border-[#2a2a31] dark:text-[#6b6b75] dark:hover:border-[#5b5b64] dark:hover:text-stone-300"
     >
       ⌘K
     </button>

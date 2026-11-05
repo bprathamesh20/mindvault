@@ -104,13 +104,13 @@ export function CaptureFab({
       <button
         onClick={() => setOpen(true)}
         aria-label="Save something new"
-        className="fixed bottom-7 right-7 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-stone-900 text-3xl font-light leading-none text-stone-100 shadow-xl transition hover:scale-105 hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
+        className="fixed bottom-[calc(var(--tabbar)+1rem)] right-5 z-40 flex h-14 w-14 md:bottom-7 md:right-7 items-center justify-center rounded-full bg-stone-900 text-3xl font-light leading-none text-stone-100 shadow-xl transition hover:scale-105 hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
       >
         ＋
       </button>
 
       {toast ? (
-        <div className="fixed bottom-24 right-7 z-40 rounded-full bg-stone-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-stone-100 dark:text-stone-900">
+        <div className="fixed bottom-[calc(var(--tabbar)+5.5rem)] right-5 z-40 rounded-full md:bottom-24 md:right-7 bg-stone-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-stone-100 dark:text-stone-900">
           {toast}
         </div>
       ) : null}
@@ -137,7 +137,7 @@ export function CaptureFab({
                 if (e.key === "Escape") setOpen(false);
               }}
               placeholder="Paste a link or jot a thought…"
-              className="mt-4 w-full rounded-xl border border-stone-200 bg-transparent px-4 py-3 text-[15px] outline-none transition placeholder:text-stone-400 focus:border-stone-500 dark:border-[#2a2a31] dark:placeholder:text-[#5b5b64] dark:focus:border-[#6b6b75]"
+              className="mt-4 w-full rounded-xl border border-stone-200 bg-transparent px-4 py-3 text-base outline-none md:text-[15px] transition placeholder:text-stone-400 focus:border-stone-500 dark:border-[#2a2a31] dark:placeholder:text-[#5b5b64] dark:focus:border-[#6b6b75]"
             />
             <input
               ref={fileInput}

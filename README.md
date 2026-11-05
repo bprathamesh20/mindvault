@@ -49,6 +49,22 @@ npx expo start          # press "a" for Android emulator
 - **UI works in Expo Go**, but the **share-sheet capture needs a dev build**: `npx expo run:android` (Android Studio required) or EAS Build.
 - Share any link → MindVault → it saves instantly.
 
+### iOS
+
+Same app, bundle ID `com.bprathamesh20.mindvault`, with a **"Save to MindVault"** share extension
+(from `expo-share-intent`; it hands the link to the app, which saves it). No Mac needed: build in
+the cloud with EAS. Requires a paid Apple Developer account.
+
+```bash
+cd apps/mobile
+npx eas-cli login
+npx eas-cli build --platform ios --profile production   # EAS creates certs, profiles + app group
+npx eas-cli submit --platform ios --latest              # uploads to App Store Connect → TestFlight
+```
+
+Install from TestFlight on your iPhone. For an ad-hoc dev build instead, register the phone with
+`npx eas-cli device:create` and build with `--profile development`.
+
 ## How a save works
 
 ```
