@@ -257,7 +257,7 @@ export default function Home() {
         onOpenPalette={() => setPaletteOpen(true)}
       />
 
-      <div className="w-full px-6 pb-32 pt-10 md:px-8">
+      <div className="w-full px-6 pb-32 pt-6 md:px-8 md:pt-10">
         <CaptureFab open={captureOpen} onOpenChange={setCaptureOpen} />
         {showAsk ? (
           <section className="mt-10">
@@ -307,7 +307,7 @@ export default function Home() {
             )}
           </section>
         ) : null}
-        <div className={`mt-10 ${showAsk || showResults ? "hidden" : ""}`}>
+        <div className={`mt-2 md:mt-10 ${showAsk || showResults ? "hidden" : ""}`}>
           <Grid
             onOpen={openItem}
             type={filterType}
