@@ -10,7 +10,7 @@ Save articles, X posts, Instagram reels, images and notes; an async pipeline
 extracts, thumbnails, tags, summarizes and embeds everything. Retrieval is via
 hybrid search — never folders.
 
-**Stack:** Convex (entire backend) · Next.js 16 web · Expo SDK 57 Android app ·
+**Stack:** Convex (entire backend) · Next.js 16 web · Expo SDK 57 Android + iOS app ·
 OpenRouter (chat + embeddings).
 
 ## Repo map
@@ -177,4 +177,5 @@ Re-pasting a URL: `duplicate` if ready, `retrying` (reset+re-enrich) if failed.
   setState in effects — derive display state instead (see `page.tsx` search).
 - Mobile share intents do NOT work in Expo Go — test with a dev build
   (`npx expo run:android`).
-- No Android SDK on this machine; verify mobile via tsc + expo export only.
+- No Android SDK or Xcode on this machine; verify mobile via tsc + expo export only
+  (`--platform ios` too when touching iOS config). iOS builds run on EAS.

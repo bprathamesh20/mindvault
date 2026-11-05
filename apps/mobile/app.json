@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bprathamesh20.mindvault",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -37,7 +41,17 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "expo-share-intent"
+      [
+        "expo-share-intent",
+        {
+          "iosShareExtensionName": "Save to MindVault",
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsWebPageWithMaxCount": 1,
+            "NSExtensionActivationSupportsText": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
