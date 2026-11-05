@@ -84,7 +84,7 @@ export default function Grid({
 
   return (
     <>
-      <div className="mb-3 -mx-6 flex snap-x scroll-px-6 items-center gap-2 overflow-x-auto px-6 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:justify-center md:gap-1.5 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
+      <div className="mb-3 -mx-4 flex snap-x scroll-px-4 items-center gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:justify-center md:gap-1.5 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
         {FILTERS.map((f) => (
           <button
             key={f.label}
@@ -109,7 +109,7 @@ export default function Grid({
       </div>
 
       {(filterActive || (spaces && spaces.length > 0)) && createSpace && (
-        <div className="mb-6 md:mb-8 -mx-6 flex snap-x scroll-px-6 items-center gap-1.5 overflow-x-auto px-6 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:justify-center md:gap-1.5 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
+        <div className="mb-6 md:mb-8 -mx-4 flex snap-x scroll-px-4 items-center gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:justify-center md:gap-1.5 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
           {spaces?.map((s) => (
             <span
               key={s.id}
