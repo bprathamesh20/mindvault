@@ -187,3 +187,31 @@ html.dark .mv-shimmer {
     @apply font-sans;
   }
 }
+/* Phones: room for the bottom tab bar (MobileTabBar) plus the home indicator.
+   Desktop has the side rail instead, so nothing is reserved there. */
+:root {
+  --tabbar: calc(3.5rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 48rem) {
+  :root {
+    --tabbar: 0px;
+  }
+}
+
+/* Touch: no grey flash on tap, no text resizing on rotate, no long-press
+   callout on cards. Inputs and article text stay selectable. */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+@media (pointer: coarse) {
+  a,
+  button,
+  img {
+    -webkit-touch-callout: none;
+  }
+  button {
+    touch-action: manipulation;
+  }
+}

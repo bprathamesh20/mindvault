@@ -13,6 +13,10 @@ export function getTheme(): Theme {
 export function setTheme(next: Theme) {
   localStorage.setItem(KEY, next);
   document.documentElement.classList.toggle("dark", next === "dark");
+  // Tints Safari's toolbar and the home-screen app's status bar.
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute("content", next === "dark" ? "#0f0f13" : "#fafaf9");
   // Lets every surface that shows the theme (rail, command menu) stay in sync
   // no matter which one flipped it.
   window.dispatchEvent(new CustomEvent<Theme>(EVENT, { detail: next }));

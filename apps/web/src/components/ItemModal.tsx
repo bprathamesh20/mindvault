@@ -209,24 +209,24 @@ export function ItemModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:p-8"
+      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 backdrop-blur-sm md:p-8"
       onClick={handleClose}
     >
       <div
-        className="relative my-auto flex max-h-[85dvh] w-[min(1400px,94vw)] flex-col overflow-hidden rounded-2xl border border-stone-200 bg-stone-50 shadow-2xl md:flex-row dark:border-[#2a2a31] dark:bg-[#17171b]"
+        className="relative flex h-dvh w-full flex-col overflow-y-auto overscroll-contain bg-stone-50 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] md:my-auto md:h-auto md:max-h-[85dvh] md:w-[min(1400px,94vw)] md:flex-row md:overflow-hidden md:rounded-2xl md:border md:border-stone-200 md:p-0 md:shadow-2xl dark:bg-[#17171b] md:dark:border-[#2a2a31]"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           aria-label="Close"
           onClick={handleClose}
-          className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-stone-300 bg-white text-xl leading-none text-stone-700 shadow-md transition hover:bg-stone-100 hover:text-stone-900 dark:border-[#3a3a42] dark:bg-[#2a2a31] dark:text-stone-200 dark:hover:bg-[#33333b]"
+          className="fixed right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] z-10 flex h-10 w-10 md:absolute md:right-3 md:top-3 items-center justify-center rounded-full border border-stone-300 bg-white text-xl leading-none text-stone-700 shadow-md transition hover:bg-stone-100 hover:text-stone-900 dark:border-[#3a3a42] dark:bg-[#2a2a31] dark:text-stone-200 dark:hover:bg-[#33333b]"
         >
           ×
         </button>
         {/* Content pane */}
         <div
-          className={`min-h-0 min-w-0 flex-1 overflow-y-auto p-6 md:p-10 ${
+          className={`min-w-0 flex-none p-6 pt-16 md:min-h-0 md:flex-1 md:overflow-y-auto md:p-10 ${
             isDocument ? "items-start" : "flex items-center justify-center"
           }`}
         >
@@ -329,7 +329,7 @@ export function ItemModal({
         </div>
 
         {/* Side panel */}
-        <div className="flex min-h-0 w-full shrink-0 flex-col gap-5 overflow-y-auto border-t border-stone-200 p-6 pt-14 md:w-[380px] md:border-l md:border-t-0 md:pt-6 dark:border-[#2a2a31]">
+        <div className="flex w-full shrink-0 flex-col gap-5 border-t border-stone-200 p-6 md:min-h-0 md:w-[380px] md:overflow-y-auto md:border-l md:border-t-0 dark:border-[#2a2a31]">
           <div>
             <input
               value={titleDraft ?? it.title ?? ""}
@@ -443,7 +443,7 @@ export function ItemModal({
                     }}
                     onBlur={() => void commitTag()}
                     placeholder="tag name…"
-                    className="w-28 rounded-full border border-stone-300 bg-transparent px-3 py-1 text-xs outline-none dark:border-[#3a3a42]"
+                    className="w-28 rounded-full border border-stone-300 bg-transparent px-3 py-1 text-base outline-none md:text-xs dark:border-[#3a3a42]"
                   />
                 </form>
               ) : (
@@ -477,7 +477,7 @@ export function ItemModal({
               }}
               placeholder="Type here to add a note…"
               rows={3}
-              className="w-full resize-none rounded-xl border border-stone-200 bg-transparent p-3 text-sm outline-none placeholder:text-stone-400 focus:border-stone-400 dark:border-[#2a2a31] dark:placeholder:text-[#5b5b64] dark:focus:border-[#4a4a55]"
+              className="w-full resize-none rounded-xl border border-stone-200 bg-transparent p-3 text-base outline-none md:text-sm placeholder:text-stone-400 focus:border-stone-400 dark:border-[#2a2a31] dark:placeholder:text-[#5b5b64] dark:focus:border-[#4a4a55]"
             />
           </div>
 

@@ -161,7 +161,7 @@ export default function Grid({
                 value={spaceName}
                 onChange={(e) => setSpaceName(e.target.value)}
                 placeholder="Space name…"
-                className="w-36 rounded-full border border-stone-300 bg-transparent px-3 py-1 text-[12px] outline-none dark:border-[#3a3a42]"
+                className="w-36 rounded-full border border-stone-300 bg-transparent px-3 py-1 text-base outline-none md:text-[12px] dark:border-[#3a3a42]"
               />
               <button type="submit" className="rounded-full bg-stone-800 px-3 py-1 text-[12px] text-stone-100 dark:bg-stone-200 dark:text-stone-900">
                 Save

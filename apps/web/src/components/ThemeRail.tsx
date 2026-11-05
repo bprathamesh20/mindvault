@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SearchIcon, SparklesIcon } from "lucide-react";
+import { SearchIcon, SettingsIcon, SparklesIcon } from "lucide-react";
 import { getTheme, onThemeChange, toggleTheme, type Theme } from "./theme";
 
 export function ThemeRail() {
@@ -34,6 +34,13 @@ export function ThemeRail() {
         </Link>
         <Link href="/ask" title="Ask" className={link(pathname === "/ask")}>
           <SparklesIcon className="size-4" />
+        </Link>
+        <Link
+          href="/settings"
+          title="Settings"
+          className={link(pathname === "/settings")}
+        >
+          <SettingsIcon className="size-4" />
         </Link>
       </nav>
 

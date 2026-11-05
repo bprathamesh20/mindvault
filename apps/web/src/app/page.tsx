@@ -14,6 +14,7 @@ import { ItemCard } from "../components/ItemCard";
 import { SearchBar, type SearchMode } from "../components/SearchBar";
 import { ThemeRail } from "../components/ThemeRail";
 import { ItemModal } from "../components/ItemModal";
+import { MobileTabBar, onFocusSearch } from "../components/MobileTabBar";
 import { DOCK_AFTER_PX, MASONRY } from "../components/layout";
 import { toggleTheme } from "../components/theme";
 import type { Card, ItemType } from "../components/types";
@@ -93,6 +94,18 @@ export default function Home() {
     const to = docked ? dockInput.current : heroInput.current;
     if (from && document.activeElement === from) to?.focus();
   }, [docked]);
+
+  // The Search tab (phones): jump to the top and put the caret in the field.
+  // This runs inside the tap, so iOS still opens the keyboard.
+  useEffect(
+    () =>
+      onFocusSearch(() => {
+        setMode("search");
+        window.scrollTo({ top: 0 });
+        heroInput.current?.focus();
+      }),
+    [],
+  );
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -213,7 +226,7 @@ export default function Home() {
   if (isLoading) {
     return (
       <main className="min-h-screen md:pl-16">
-        <div className="px-8 pt-12 md:px-14">
+        <div className="px-6 pt-[calc(env(safe-area-inset-top)+2rem)] md:px-14 md:pt-12">
           <div className="h-14 w-2/3 border-b border-stone-300 dark:border-[#2a2a31]" />
         </div>
         <div className="w-full px-6 pb-16 pt-10 md:px-8">
@@ -230,6 +243,7 @@ export default function Home() {
   return (
     <main className="min-h-screen md:pl-16">
       <ThemeRail />
+      <MobileTabBar searching={showResults} />
 
       <SearchBar
         variant="hero"
@@ -304,7 +318,7 @@ export default function Home() {
 
       {/* The hero's stand-in once it has scrolled off the top. */}
       <div
-        className={`pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-5 transition duration-300 md:pl-16 ${
+        className={`pointer-events-none fixed inset-x-0 bottom-0 z-40 hidden justify-center px-4 md:flex pb-5 transition duration-300 md:pl-16 ${
           docked ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
         }`}
         // inert keeps the hidden bar out of the tab order and out of the way
