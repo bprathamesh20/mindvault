@@ -96,7 +96,7 @@ export function SearchBar({
   }
 
   return (
-    <div className="px-6 pt-[calc(env(safe-area-inset-top)+2rem)] md:px-14 md:pt-12">
+    <div className="px-5 pt-[calc(env(safe-area-inset-top)+2rem)] md:px-14 md:pt-12">
       <input
         ref={inputRef}
         value={value}

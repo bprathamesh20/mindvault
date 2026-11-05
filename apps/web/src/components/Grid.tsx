@@ -84,15 +84,15 @@ export default function Grid({
 
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-center justify-center gap-1.5">
+      <div className="mb-3 -mx-4 flex snap-x scroll-px-4 items-center gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:justify-center md:gap-1.5 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
         {FILTERS.map((f) => (
           <button
             key={f.label}
             onClick={() => applyType(f.value)}
-            className={`rounded-full px-3.5 py-1.5 text-[13px] transition ${
+            className={`shrink-0 snap-start whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[13px] transition ${
               type === f.value && !activeSpaceId
-                ? "bg-stone-800 text-stone-100 dark:bg-stone-200 dark:text-stone-900"
-                : "text-stone-500 hover:bg-stone-200/50 dark:text-[#8b8b94] dark:hover:bg-[#232329]"
+                ? "border-stone-800 bg-stone-800 text-stone-100 dark:border-stone-200 dark:bg-stone-200 dark:text-stone-900"
+                : "border-stone-200 text-stone-500 hover:bg-stone-200/50 md:border-transparent dark:border-[#2a2a31] dark:text-[#8b8b94] dark:hover:bg-[#232329] md:dark:border-transparent"
             }`}
           >
             {f.label}
@@ -101,7 +101,7 @@ export default function Grid({
         {tag && (
           <button
             onClick={() => applyTag(null)}
-            className="rounded-full bg-stone-800 px-3.5 py-1.5 text-[13px] text-stone-100 dark:bg-stone-200 dark:text-stone-900"
+            className="shrink-0 whitespace-nowrap rounded-full bg-stone-800 px-3.5 py-1.5 text-[13px] text-stone-100 dark:bg-stone-200 dark:text-stone-900"
           >
             #{tag} ✕
           </button>
@@ -109,11 +109,11 @@ export default function Grid({
       </div>
 
       {(filterActive || (spaces && spaces.length > 0)) && createSpace && (
-        <div className="mb-8 flex flex-wrap items-center justify-center gap-1.5">
+        <div className="mb-6 md:mb-8 -mx-4 flex snap-x scroll-px-4 items-center gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:justify-center md:gap-1.5 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
           {spaces?.map((s) => (
             <span
               key={s.id}
-              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[12px] transition ${
+              className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-[12px] transition ${
                 activeSpaceId === s.id
                   ? "border-stone-400 bg-stone-100 text-stone-900 dark:border-[#4a4a55] dark:bg-[#232329] dark:text-stone-100"
                   : "border-stone-200 text-stone-500 hover:border-stone-400 dark:border-[#2a2a31] dark:text-[#8b8b94] dark:hover:border-[#4a4a55]"
@@ -136,7 +136,7 @@ export default function Grid({
           {filterActive && !naming && (
             <button
               onClick={() => setNaming(true)}
-              className="rounded-full border border-dashed border-stone-300 px-3 py-1 text-[12px] text-stone-400 hover:border-stone-500 dark:border-[#3a3a42] dark:hover:border-[#5b5b64]"
+              className="shrink-0 whitespace-nowrap rounded-full border border-dashed border-stone-300 px-3 py-1 text-[12px] text-stone-400 hover:border-stone-500 dark:border-[#3a3a42] dark:hover:border-[#5b5b64]"
             >
               ＋ Save view as Space
             </button>

@@ -4,7 +4,8 @@
 // breakpoint.
 // Phones get two columns — the Pinterest / mobile-app grid — before the
 // width-driven layout takes over.
-export const MASONRY = "columns-2 gap-3 sm:columns-[18rem] sm:gap-5";
+// Phone spacing matches the native feed: 10px between columns, 18px between cards.
+export const MASONRY = "columns-2 gap-2.5 sm:columns-[18rem] sm:gap-5";
 
 // The dock appears once the hero search has scrolled out of the way.
 export const DOCK_AFTER_PX = 160;

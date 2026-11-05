@@ -239,7 +239,7 @@ function NoteTile({ item, spec }: { item: Card; spec: TagSpec }) {
     .filter(Boolean)
     .join("\n");
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-50 via-violet-50 to-white p-3.5 ring-1 ring-indigo-200/70 dark:from-[#1f1d33] dark:via-[#1b1a27] dark:to-[#17171d] dark:ring-[#2f2c4a]">
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-50 via-violet-50 to-white p-3.5 ring-1 ring-indigo-200/70 dark:from-[#1f1d33] dark:via-[#1b1a27] dark:to-[#17171d] dark:ring-[#2f2c4a] max-md:p-3">
       <Tag spec={spec} onSurface />
       <p className="mt-3 line-clamp-[8] whitespace-pre-line font-serif text-[17px] leading-snug text-stone-700 dark:text-[#e4e4e7]">
         {body || item.title || "Empty note"}
@@ -251,7 +251,7 @@ function NoteTile({ item, spec }: { item: Card; spec: TagSpec }) {
 function TweetTile({ item }: { item: Card }) {
   const handle = (embedString(item.embedJson, "handle") ?? item.author ?? "").replace(/^@/, "");
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-white p-3.5 ring-1 ring-stone-200/80 dark:bg-[#17171d] dark:ring-white/[0.06]">
+    <div className="relative overflow-hidden rounded-2xl bg-white p-3.5 max-md:p-3 ring-1 ring-stone-200/80 dark:bg-[#17171d] dark:ring-white/[0.06]">
       <div className="flex items-center gap-2">
         <span
           className={`grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gradient-to-br ${hueFor(handle || "x")} text-[11px] font-semibold uppercase text-white`}
@@ -321,7 +321,7 @@ function GitHubTile({ item }: { item: Card }) {
   const stars = embedNumber(e, "stars");
   const language = embedString(e, "language");
   return (
-    <div className="relative flex min-h-[130px] flex-col gap-2.5 overflow-hidden rounded-2xl bg-[#24292f] p-3.5 text-white">
+    <div className="relative flex min-h-[130px] flex-col gap-2.5 overflow-hidden rounded-2xl bg-[#24292f] p-3.5 text-white max-md:p-3">
       <div className="flex items-center gap-2">
         {item.thumbnailUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -420,11 +420,11 @@ export function ItemCard({
       role={onOpen ? "button" : undefined}
       tabIndex={onOpen ? 0 : undefined}
       aria-label={cardLabel(item)}
-      className={`group mb-5 break-inside-avoid sm:mb-6 rounded-2xl outline-none transition duration-200 focus-visible:ring-2 focus-visible:ring-stone-400 focus-visible:ring-offset-4 focus-visible:ring-offset-[#fafaf9] dark:focus-visible:ring-[#6b6b75] dark:focus-visible:ring-offset-[#0f0f13] ${
+      className={`group mb-4.5 break-inside-avoid sm:mb-6 rounded-2xl outline-none transition duration-200 focus-visible:ring-2 focus-visible:ring-stone-400 focus-visible:ring-offset-4 focus-visible:ring-offset-[#fafaf9] dark:focus-visible:ring-[#6b6b75] dark:focus-visible:ring-offset-[#0f0f13] ${
         onOpen ? "cursor-pointer" : ""
       }`}
     >
-      <div className="transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_36px_-18px_rgba(0,0,0,0.45)] group-active:scale-[0.99] rounded-2xl">
+      <div className="transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_36px_-18px_rgba(0,0,0,0.45)] group-active:scale-[0.98] group-active:opacity-85 rounded-2xl">
         {tile}
       </div>
       {showHeading && heading ? (

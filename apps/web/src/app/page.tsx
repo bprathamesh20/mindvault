@@ -226,10 +226,10 @@ export default function Home() {
   if (isLoading) {
     return (
       <main className="min-h-screen md:pl-16">
-        <div className="px-6 pt-[calc(env(safe-area-inset-top)+2rem)] md:px-14 md:pt-12">
+        <div className="px-5 pt-[calc(env(safe-area-inset-top)+2rem)] md:px-14 md:pt-12">
           <div className="h-14 w-2/3 border-b border-stone-300 dark:border-[#2a2a31]" />
         </div>
-        <div className="w-full px-6 pb-16 pt-10 md:px-8">
+        <div className="w-full px-4 pb-16 pt-10 md:px-8">
           <CachedGrid />
         </div>
       </main>
@@ -257,7 +257,7 @@ export default function Home() {
         onOpenPalette={() => setPaletteOpen(true)}
       />
 
-      <div className="w-full px-6 pb-32 pt-10 md:px-8">
+      <div className="w-full px-4 pb-32 pt-6 md:px-8 md:pt-10">
         <CaptureFab open={captureOpen} onOpenChange={setCaptureOpen} />
         {showAsk ? (
           <section className="mt-10">
@@ -307,7 +307,7 @@ export default function Home() {
             )}
           </section>
         ) : null}
-        <div className={`mt-10 ${showAsk || showResults ? "hidden" : ""}`}>
+        <div className={`mt-2 md:mt-10 ${showAsk || showResults ? "hidden" : ""}`}>
           <Grid
             onOpen={openItem}
             type={filterType}
